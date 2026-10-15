@@ -1,0 +1,77 @@
+[
+  {
+    "name": "VnExpress",
+    "rss_url": "https://vnexpress.net/rss/tin-moi-nhat.rss",
+    "is_active": true,
+    "allowed_hosts": [
+      "vnexpress.net"
+    ],
+    "checked_on": "2026-10-14",
+    "official_rss_url": "https://vnexpress.net/rss",
+    "robots_url": "https://vnexpress.net/robots.txt",
+    "attribution": "Nguồn: VnExpress",
+    "review_status": "rss_reader_supported",
+    "review_note": "Personal nonprofit RSS reader with attribution; honor cessation requests.",
+    "article_extraction_allowed": false,
+    "ai_processing_allowed": false,
+    "availability": {
+      "official_link": true,
+      "status": 200,
+      "content_type": "application/xml; charset=utf-8",
+      "items": 54,
+      "bozo": false,
+      "robots_status": 200,
+      "robots_allowed": true
+    }
+  },
+  {
+    "name": "Tuổi Trẻ",
+    "rss_url": "https://tuoitre.vn/home.rss",
+    "is_active": true,
+    "allowed_hosts": [
+      "tuoitre.vn"
+    ],
+    "checked_on": "2026-10-14",
+    "official_rss_url": "https://tuoitre.vn/rss.htm",
+    "robots_url": "https://tuoitre.vn/robots.txt",
+    "attribution": "Nguồn: Tuổi Trẻ",
+    "review_status": "rss_reader_supported",
+    "review_note": "Personal nonprofit RSS reader with attribution; honor cessation requests.",
+    "article_extraction_allowed": false,
+    "ai_processing_allowed": false,
+    "availability": {
+      "official_link": true,
+      "status": 200,
+      "content_type": "text/xml",
+      "items": 50,
+      "bozo": false,
+      "robots_status": 200,
+      "robots_allowed": true
+    }
+  },
+  {
+    "name": "Thanh Niên",
+    "rss_url": "https://thanhnien.vn/rss/home.rss",
+    "is_active": false,
+    "allowed_hosts": [
+      "thanhnien.vn"
+    ],
+    "checked_on": "2026-10-14",
+    "official_rss_url": "https://thanhnien.vn/rss.html",
+    "robots_url": "https://thanhnien.vn/robots.txt",
+    "attribution": "Theo Báo Thanh Niên",
+    "review_status": "reuse_unresolved",
+    "review_note": "RSS reader instructions require attribution, but the footer prohibits copying without written consent; keep ingestion inactive.",
+    "article_extraction_allowed": false,
+    "ai_processing_allowed": false,
+    "availability": {
+      "official_link": true,
+      "status": 200,
+      "content_type": "text/xml; charset=UTF-8",
+      "items": 60,
+      "bozo": false,
+      "robots_status": 200,
+      "robots_allowed": true
+    }
+  }
+]

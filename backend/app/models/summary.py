@@ -46,7 +46,7 @@ class Summary(Base):
         string_enum(Category, name="category"), nullable=False, index=True
     )
     keywords: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
-    model_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    summarize_model_name: Mapped[str] = mapped_column(String(160), nullable=False)
     agent_model_name: Mapped[str] = mapped_column(String(160), nullable=False)
     approved: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=false()

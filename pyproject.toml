@@ -1,0 +1,65 @@
+[project]
+name = "vietnamese-news-summarization"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "youngazier", email = "cuudendasunkid2208@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.13,<2",
+    "apscheduler>=3.11,<4",
+    "beautifulsoup4>=4.12,<5",
+    "fastapi>=0.115,<1",
+    "feedparser>=6,<7",
+    "google-genai>=2.29,<3",
+    "httpx>=0.28.1",
+    "langchain-google-genai>=4,<5",
+    "langgraph>=1,<2",
+    "psycopg[binary]>=3.2,<4",
+    "pydantic-settings>=2,<3",
+    "sentencepiece>=0.2,<0.3",
+    "sqlalchemy>=2.1.4",
+    "torch>=2.6,<3",
+    "transformers>=4.50,<5",
+    "uvicorn>=0.30,<1",
+]
+
+[project.scripts]
+vietnamese-news-summarization = "app:main"
+
+[build-system]
+requires = ["uv_build>=0.12.15,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "app"
+module-root = "backend"
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28,<1",
+    "pytest>=8,<10",
+    "ruff>=0.9,<1",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: tests that require a real PostgreSQL database",
+    "model: opt-in tests using real local model artifacts",
+    "live: opt-in tests using the real Gemini Developer API",
+]
+
+# Alembic discovers this from the repository root without a -c argument.
+[tool.alembic]
+script_location = "%(here)s/backend/alembic"
+prepend_sys_path = ["%(here)s/backend"]

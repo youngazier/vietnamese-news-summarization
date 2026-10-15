@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Fixture news</title>
+    <link>https://example.com/</link>
+    <description>Fictional feed for tests</description>
+
+    <item>
+      <title><![CDATA[<b>Tin thử nghiệm</b>]]></title>
+      <link>https://example.com/news?id=42&amp;utm_source=rss</link>
+      <pubDate>Wed, 14 Oct 2026 10:00:00 +0700</pubDate>
+      <description><![CDATA[
+        <p>Nội dung <b>thử nghiệm</b>.</p>
+        <script>unwanted()</script>
+      ]]></description>
+    </item>
+
+    <item>
+      <title>Tin không có ngày</title>
+      <link>https://example.com/second</link>
+    </item>
+
+    <item>
+      <link>https://example.com/missing-title</link>
+    </item>
+
+    <item>
+      <title>Thiếu đường dẫn</title>
+    </item>
+
+    <item>
+      <title>Host chưa được duyệt</title>
+      <link>https://other.example/news</link>
+    </item>
+  </channel>
+</rss>
