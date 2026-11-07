@@ -3,6 +3,17 @@
 Read this file first at the start of every chat session, before taking any other steps.
 Keep changes simple and focused. Consult linked docs when needed rather than copying them here.
 
+## Environment Files and Secrets
+
+- Never open, read, search, or print `.env` or secret-bearing `.env.*` files, including
+  through scripts or tools. Use `.env.example` as the configuration reference instead.
+- Do not expose secrets indirectly through environment dumps, settings objects, database
+  connection details, logs, or test tracebacks. For tests using real credentials, use
+  `--tb=no` and never use `--showlocals`.
+- Applications may load their existing configuration during normal execution, but agents
+  must not inspect or display its secret values. Leave credential setup to the user.
+- Never commit secrets.
+
 ## 1. Project Structure & Module Organization
 
 ```text
@@ -38,8 +49,8 @@ AI processing, frontend, and containers are not implemented yet.
 
 ## 2. Build, Test, and Development Commands
 
-Run commands from the repository root. Copy `.env.example` to `.env` if `.env` does
-not exist, then configure credentials locally. Never commit secrets.
+Run commands from the repository root. The user configures local credentials in `.env`
+using `.env.example` as a template; agents must follow the environment-file rules above.
 
 ### Frontend
 
@@ -60,14 +71,14 @@ Use `uv add` or `uv add --dev` for dependency changes; keep `pyproject.toml` and
 
 ### Database
 
-Set `DATABASE_URL` in root `.env` using `postgresql+psycopg://` and TLS.
+The user sets `DATABASE_URL` in root `.env` using `postgresql+psycopg://` and TLS.
 The database is hosted on Supabase; there is no local database build step.
 
 ```sh
 uv run --locked --env-file .env python -m app.db.probe
 uv run --locked alembic upgrade head
 uv run --locked alembic current
-uv run --locked pytest -m integration tests/integration -q
+uv run --locked pytest -m integration tests/integration -q --tb=no
 ```
 
 Use the existing Alembic setup and migrations; do not reinitialize them or use

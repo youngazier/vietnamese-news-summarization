@@ -41,15 +41,13 @@ def persist_summary(
             keywords=candidate.keywords,
             summarize_model_name=summarize_model_name,
             agent_model_name=agent_model_name,
-            approved=candidate.approved,
+            approved=True,
             review_feedback=candidate.feedback,
             draft_attempts=candidate.attempts,
             input_truncated=candidate.input_truncated,
         )
     )
-    article.processing_status = (
-        ProcessingStatus.READY if candidate.approved else ProcessingStatus.NEEDS_REVIEW
-    )
+    article.processing_status = ProcessingStatus.READY
     article.processing_error = None
     if job_id is not None:
         record_article_result(session, job_id, article.processing_status)

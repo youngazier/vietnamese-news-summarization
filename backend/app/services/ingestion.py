@@ -14,7 +14,7 @@ from app.agents.schemas import ReviewedNews
 from app.agents.state import NewsState
 from app.core.config import get_settings
 from app.db.session import get_session_factory
-from app.models import Article, IngestionJob, JobStatus, ProcessingStatus, Source
+from app.models import Article, ContentOrigin, IngestionJob, JobStatus, ProcessingStatus, Source
 from app.seed_sources import DEFAULT_SOURCE_CONFIG, SourceConfig, load_source_config
 from app.services.article_extractor import (
     MAX_TEXT_CHARACTERS,
@@ -25,7 +25,7 @@ from app.services.job_service import record_article_result
 from app.services.rss_collector import FeedEntry, FeedError, RSSCollector
 from app.services.summary_persistence import persist_summary
 from app.services.url_normalization import normalize_url
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -207,6 +207,7 @@ def prepare_pending_articles(
                     Article.rss_description.is_not_distinct_from(description),
                 )
                 .values(
+                    image_url=func.coalesce(Article.image_url, result.image_url),
                     content=result.text,
                     content_origin=result.content_origin,
                     processing_status=status,
@@ -225,6 +226,82 @@ def prepare_pending_articles(
     return TextPreparationResult(tuple(prepared_ids), pending, needs_review, skipped)
 
 
+def recover_review_articles(
+    factory: Callable[[], Session],
+    source_id: int,
+    config: SourceConfig,
+    extractor: ArticleExtractor,
+    *,
+    max_articles: int = 20,
+    should_stop: Callable[[], bool] = lambda: False,
+) -> TextPreparationResult:
+    """Retry old excerpt-only articles after full-text extraction is enabled.
+
+    Only articles without an AI draft and with the earlier extraction-disabled
+    reason qualify. A failed extraction is recorded once, avoiding a publisher
+    request on every scheduled job. Human decisions and rejected drafts are untouched.
+    """
+    if max_articles <= 0:
+        raise ValueError("Text preparation limit must be positive")
+    if not (config.article_extraction_allowed and config.ai_processing_allowed):
+        return TextPreparationResult((), 0, 0, 0)
+    with factory() as session, session.begin():
+        require_active_source(session, source_id, config)
+        rows = session.execute(
+            select(Article.id, Article.original_url, Article.rss_description)
+            .where(
+                Article.source_id == source_id,
+                Article.processing_status == ProcessingStatus.NEEDS_REVIEW,
+                ~Article.summary.has(),
+                Article.processing_error.like("extraction_disabled;%"),
+            )
+            .order_by(Article.id)
+            .limit(max_articles)
+        ).all()
+
+    prepared_ids = []
+    pending = needs_review = skipped = 0
+    for article_id, url, description in rows:
+        if should_stop():
+            break
+        result = extractor.extract(
+            url, description, config, source_id=source_id, article_id=article_id
+        )
+        recovered = result.usable and result.content_origin == ContentOrigin.EXTRACTED
+        with factory() as session, session.begin():
+            require_active_source(session, source_id, config)
+            saved_id = session.scalar(
+                update(Article)
+                .where(
+                    Article.id == article_id,
+                    Article.processing_status == ProcessingStatus.NEEDS_REVIEW,
+                    ~Article.summary.has(),
+                    Article.original_url == url,
+                    Article.rss_description.is_not_distinct_from(description),
+                    Article.processing_error.like("extraction_disabled;%"),
+                )
+                .values(
+                    image_url=func.coalesce(Article.image_url, result.image_url),
+                    content=result.text if recovered else Article.content,
+                    content_origin=result.content_origin if recovered else Article.content_origin,
+                    processing_status=(
+                        ProcessingStatus.PENDING if recovered else ProcessingStatus.NEEDS_REVIEW
+                    ),
+                    processing_error=(
+                        None if recovered else result.failure_reason or "full_text_unavailable"
+                    ),
+                )
+                .returning(Article.id)
+            )
+        if saved_id is None:
+            skipped += 1
+        else:
+            prepared_ids.append(saved_id)
+            pending += int(recovered)
+            needs_review += int(not recovered)
+    return TextPreparationResult(tuple(prepared_ids), pending, needs_review, skipped)
+
+
 def insert_article(session: Session, entry: FeedEntry) -> int | None:
     """Return a new ID or None on a canonical-URL conflict; caller owns commit."""
     statement = (
@@ -236,6 +313,7 @@ def insert_article(session: Session, entry: FeedEntry) -> int | None:
             canonical_url=normalize_url(entry.original_url),
             published_at=entry.published_at,
             rss_description=entry.rss_description,
+            image_url=entry.image_url,
             processing_status=ProcessingStatus.PENDING,
         )
         .on_conflict_do_nothing(index_elements=[Article.canonical_url])

@@ -327,6 +327,75 @@ For a **single worker**, a simple transaction with an atomic claim is acceptable
 
 **Volume/cost control:** `JOB_MAX_ARTICLE_INSERTIONS=20` and `JOB_MAX_ARTICLE_RESULTS=20`; consume pending backlog before new processing. Bound text/tokens, HTTP retries and job backlog. Use deterministic RSS fixtures for tests.
 
+### 6.1 Phase 3: RSS collection and usable text (Days 3–4)
+
+RSS is a publisher-provided XML feed of recent entries: titles, original links,
+optional publication dates and descriptions. A description is often only an
+excerpt. Phase 3 discovers articles, stores them without duplicates, and prepares
+source text with provenance and a preliminary quality decision. AI generation and
+review belong to later phases.
+
+```mermaid
+flowchart LR
+    Config[Validate source configuration] --> Feed[Fetch and parse RSS]
+    Feed --> Insert[Normalize URLs and insert new articles]
+    Insert --> Pending[Read oldest unprepared pending rows]
+    Pending --> Text[Permitted HTML extraction or RSS fallback]
+    Text --> Quality{At least 200 characters?}
+    Quality -->|Yes| ReadyForProcessing[Save text; remain pending]
+    Quality -->|No| Review[Save available text; needs_review]
+```
+
+| Step | Code entry point | Behavior |
+| --- | --- | --- |
+| Configure and seed | [`seed_sources.py`](../backend/app/seed_sources.py): `SourceConfig`, `ArticleExtractionPolicy`, `load_source_config()`, `seed_sources()` | Pydantic validates `config/sources.json` before DB access. `SourceConfig` holds feed/review settings; its optional extraction policy holds public path prefixes, a CSS content selector and a review note. Seed only `name`, `rss_url`, `is_active`; upsert by RSS URL. Other policy fields stay in JSON. |
+| Fetch and parse | [`rss_collector.py`](../backend/app/services/rss_collector.py): `RSSCollector.collect()` → `fetch()` → `parse_feed()` | Return `FeedEntry` dataclasses. Clean title/description HTML; skip missing titles and invalid/unreviewed links. Convert known dates to UTC, otherwise NULL. Reject malformed feeds; a valid empty feed succeeds. |
+| Establish identity | [`url_normalization.py`](../backend/app/services/url_normalization.py): `normalize_url()` | Lowercase scheme/host; remove default ports, fragments and known tracking parameters. Preserve path differences and identifying query parameters. Store both original and canonical URLs. |
+| Insert metadata | [`ingestion.py`](../backend/app/services/ingestion.py): `ingest_entries()` → `insert_article()` | PostgreSQL canonical-URL uniqueness plus `ON CONFLICT DO NOTHING RETURNING id` makes duplicates no-ops, including concurrent inserts. Duplicates consume no insertion capacity and never overwrite existing articles. |
+| Prepare text | `prepare_pending_articles()` → [`ArticleExtractor.extract()`](../backend/app/services/article_extractor.py) | Select oldest source rows with status `pending`, NULL content and NULL origin. Attempt enabled public-HTML extraction; fall back to permitted RSS descriptions when disabled, unavailable or inadequate. Remove markup/noise and retain at most 20,000 characters. |
+| Persist quality | `prepare_pending_articles()` | Save `ExtractionResult.text`, origin, status and redacted reason together. At least 200 cleaned characters stays `pending`; short/missing text becomes `needs_review`. Origin is `extracted` or `rss_excerpt`, and NULL when text is absent. |
+
+**HTTP and access rules.** Requests use an identifying user agent, a 15-second
+HTTP timeout and a one-second request delay. Each feed, robots or article fetch
+has at most three requests shared between redirects and retries, with bounded
+backoff. Validate HTTPS/exact hosts before following redirects. Cap decoded feed
+and HTML bodies at 2 MiB; robots at 256 KiB. Enabled article extraction additionally
+checks public paths and current robots rules for the application user agent.
+Robots rules describe crawler access; reuse and AI processing require separate
+review. The RSS collector uses recorded robots-review evidence in configuration.
+
+**Transactions and recovery.** Feed fetching finishes before the insertion
+transaction. Text preparation closes its snapshot transaction before publisher
+IO, then commits each result separately. Before saving, recheck source activation
+and RSS identity; a conditional update requires the article still be pending,
+unprepared, and have the same URL/description. Concurrently changed rows are
+skipped. Committed preparation survives interruption; subsequent runs resume old
+unprepared rows even if absent from today's feed. Already prepared and non-pending
+rows are preserved. Insertion and preparation have separate default limits of 20,
+so newly inserted rows may wait behind older backlog.
+
+**Current boundary and verification.** The committed configuration activates
+VnExpress/Tuổi Trẻ for reviewed RSS use and leaves Thanh Niên inactive; publisher
+article extraction and AI flags remain false. HTML extraction is tested with
+fictional fixtures; live RSS fallback is documented in the [Day 4 guide](day-4-extraction.md).
+The 200-character check is provisional and does not establish factual completeness.
+Fixed HTTP fixtures and isolated PostgreSQL tests cover retries, redirects,
+deduplication races, provenance, transaction boundaries and resumable writes.
+See [Phase 3 acceptance](todos.md#phase-3--days-34-rss-and-usable-text) and
+[source evidence](source-evidence.md) for remaining policy gates.
+
+```sh
+uv run --locked --env-file .env python -m app.seed_sources
+uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --verify-repeat
+uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --prepare-only
+```
+
+`--verify-repeat` replays only the attempted feed slice and requires zero new
+insertions. `--prepare-only` skips feed collection and resumes stored text work;
+after draining the backlog, repeating it prepares zero rows. Both commands report
+IDs/counters; extraction logs include source/article/job IDs and fixed failure
+classes without raw payloads or credentials.
+
 ---
 
 ## 7. LangGraph AI workflow (MVP)

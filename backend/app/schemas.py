@@ -3,7 +3,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .models.enums import Category, ContentOrigin, JobStatus, JobTrigger, ProcessingStatus
+from .models.enums import (
+    Category,
+    ContentOrigin,
+    JobStatus,
+    JobTrigger,
+    ProcessingStatus,
+)
 
 
 class SourceRead(BaseModel):
@@ -21,6 +27,8 @@ class ArticleCard(BaseModel):
     id: int
     title: str
     original_url: str
+    image_url: str | None
+    review_decision: Literal["accept", "decline"] | None = None
     source: SourceRead
     published_at: datetime | None
     created_at: datetime

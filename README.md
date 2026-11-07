@@ -1,10 +1,10 @@
 # Vietnamese News Summarization
 
-A Vietnamese news reader being built with FastAPI, Supabase PostgreSQL, local ViT5 summarization, and Gemini metadata/review. The planned reader collects reviewed publisher RSS feeds and displays approved summaries through a React interface.
+A Vietnamese news reader built with FastAPI, Supabase PostgreSQL, local ViT5 summarization, and Gemini metadata/review. The reader collects reviewed publisher RSS feeds, performs local summarization with Gemini editorial review, and displays approved summaries through a React interface.
 
-The repository currently provides a Python project, a working health endpoint, three database-backed read endpoints, environment configuration, a database connection probe, SQLAlchemy models, a lazy session factory, and Alembic revisions through `0002`. Manual RSS collection, deduplicated persistence, gated HTML extraction, RSS fallback and source-text quality labeling are implemented through Day 4. Day 5 adds local CPU ViT5 inference, Gemini structured metadata and a draft node; see the [model setup and verification guide](docs/day-5-model.md). The committed publisher configuration keeps article extraction and AI processing disabled under its current reviews; permitted RSS excerpts supply normal ingestion text. A separate user-authorized full-text test verified Day 6 approval and REST visibility. Day 6 adds a source-based review graph with at most two drafts and atomic, replay-safe summary persistence; see the [review and persistence guide](docs/day-6-review.md). Day 7 adds durable job submission/polling, the standalone worker, atomic counters, restart recovery and scheduling; see the [worker guide](docs/day-7-worker.md). The frontend and application containers remain unfinished.
+The repository provides a Python FastAPI backend, database models with Alembic migrations, source seeding, manual and scheduled RSS ingestion, local ViT5 summarization, a Gemini review loop, a standalone background worker, and a React + Vite frontend in `frontend/`.
 
-This tutorial walks through the setup available today: install the project, run the API, create a Supabase project, configure its database connection, and prepare a Gemini API key. Commands run from the repository root unless stated otherwise. Shell examples use Bash or Zsh on Linux/macOS; Windows users can use WSL or adapt file commands to PowerShell.
+This tutorial walks through the setup available today: install the project, run the backend and frontend, create a Supabase project, configure the database connection, and prepare a Gemini API key. Commands run from the repository root unless stated otherwise. Shell examples use Bash or Zsh on Linux/macOS; Windows users can use WSL or adapt file commands to PowerShell.
 
 ## 1. Install the prerequisites
 
@@ -25,7 +25,7 @@ uv --version
 
 Python 3.12 is selected by this repository. The next step installs it through uv if needed.
 
-Node/npm and Docker are needed for later frontend and container work. You can prepare them now using the [Node.js download instructions](https://nodejs.org/en/download) and [Docker installation guide](https://docs.docker.com/engine/install/). Choose a supported Node LTS release; check the frontend's version requirements once it is available.
+Node.js (v18+ or v20+ LTS) and npm are required to run the frontend application in `frontend/`. Docker is needed for container workflows. You can install them using the [Node.js download instructions](https://nodejs.org/en/download) and [Docker installation guide](https://docs.docker.com/engine/install/).
 
 ```sh
 node --version
@@ -85,6 +85,16 @@ uv sync --locked --no-dev
 
 Use the default sync for development and tests. Model weights are downloaded separately in the model phase.
 
+### Install frontend dependencies
+
+Install the frontend npm packages from the `frontend` directory:
+
+```sh
+cd frontend
+npm install
+cd ..
+```
+
 ### Add or remove libraries while developing
 
 These commands are for changing project dependencies; users cloning the project only need the sync command above.
@@ -123,29 +133,67 @@ For now, keep the template's model paths and processing limits. Database and Gem
 
 Application settings load `.env` from the current working directory. Run commands from the repository root. Environment variables already exported in your shell take precedence; restart running processes after changing configuration.
 
-## 4. Run the API before connecting external services
+## 4. How to run the project (Backend and Frontend)
 
-Start the development server:
+This section covers running both the backend API and the frontend user interface for development.
+
+### Start the Backend API
+
+Always run backend commands from the **repository root** so that the application loads `.env` properly:
 
 ```sh
 uv run --locked uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-In another terminal, request the health endpoint:
+> [!IMPORTANT]
+> Run commands from the repository root, not inside `backend/`. Pydantic Settings resolves `.env` relative to the current working directory; running inside `backend/` causes `DATABASE_URL` and other variables in the root `.env` to be missed, raising `ValueError: DATABASE_URL is not set in the environment variables`. If you must run from `backend/`, pass `--env-file ../.env`.
+
+- **API Liveness check**: In another terminal, verify the service is running:
+  ```sh
+  curl --fail http://127.0.0.1:8000/health
+  # {"status":"ok"}
+  ```
+  `/health` confirms that the server is alive without requiring external database or AI connections.
+- **Interactive API Documentation (Swagger)**: Open <http://127.0.0.1:8000/docs> in your browser.
+- **Stop the server**: Press `Ctrl+C`.
+
+### Start the Frontend
+
+In a separate terminal, start the Vite development server:
 
 ```sh
-curl --fail http://127.0.0.1:8000/health
+cd frontend
+npm run dev
 ```
 
-Expected response:
+- **News Reader UI**: Open <http://127.0.0.1:5173> in your browser to view the news reader feed.
+- **Manual Review UI**: Open <http://127.0.0.1:5173/#duyet-bai> to compare stored sources with candidate AI drafts and make approval decisions.
+- **API Proxy**: Vite is preconfigured ([frontend/vite.config.ts](frontend/vite.config.ts)) to automatically proxy all `/api` requests to `http://127.0.0.1:8000`. Keep the backend server running while browsing the frontend.
 
-```json
-{"status":"ok"}
+Additional frontend commands (from `frontend/`):
+```sh
+npm run lint      # Run ESLint checks
+npm run build     # Type-check with tsc and build production bundle into dist/
+npm run preview   # Preview the production build locally
 ```
 
-Interactive API documentation is available at <http://127.0.0.1:8000/docs>. The server binds to loopback for local access. Stop it with Ctrl+C.
+### (Optional) Start the Background Worker
 
-`/health` confirms that the API is running. It intentionally does not connect to Supabase, call Gemini, or load an AI model.
+If you want background RSS ingestion, local ViT5 summarization, and Gemini editorial review to process durable jobs automatically, start the worker from the repository root:
+
+```sh
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env python -m app.worker
+```
+
+The worker recovers unfinished jobs on startup, polls for durable jobs every 10 idle seconds, and schedules ingestion every 30 minutes. Run at most one worker instance.
+
+### Development Workflow Summary
+
+| Process | Working Directory | Command | URL / Port |
+| --- | --- | --- | --- |
+| **Backend API** | Repository root (`/`) | `uv run --locked uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload` | <http://127.0.0.1:8000> / <http://127.0.0.1:8000/docs> |
+| **Frontend UI** | `frontend/` | `npm run dev` | <http://127.0.0.1:5173> / <http://127.0.0.1:5173/#duyet-bai> |
+| **Worker** *(optional)* | Repository root (`/`) | `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env python -m app.worker` | Background polling process |
 
 ## 5. Create a Supabase project
 
@@ -246,6 +294,8 @@ curl --fail 'http://127.0.0.1:8000/api/v1/articles?q=th%E1%BB%AD&page=1&page_siz
 
 Use an ID returned by the list endpoint for `GET /api/v1/articles/{id}`. Empty application tables legitimately return `[]` for sources and an article page with `items: []`. D2.10 verified nonempty source/list/detail responses using a fictional article in a disposable PostgreSQL schema.
 
+To view articles in the browser interface, start the frontend (`cd frontend && npm run dev`) and open <http://127.0.0.1:5173>.
+
 Relevant checks:
 
 ```sh
@@ -310,6 +360,8 @@ The publisher review is recorded in [source-evidence.md](docs/source-evidence.md
 | `uv` is not found | Reopen the terminal after installation and check the installer instructions for PATH configuration. |
 | Wrong Python version | Run from the repository root and repeat `uv sync --locked --python 3.12`. |
 | `DATABASE_URL is not configured` | Save the URL in root `.env` and run the probe with `--env-file .env`. |
+| `DATABASE_URL is not set in the environment variables` | Ensure you run backend commands from the repository root (where root `.env` lives), not inside `backend/`. If running from `backend/`, specify `--env-file ../.env`. |
+| Frontend network error / `/api` failed | Ensure the backend API is running on `http://127.0.0.1:8000`. Vite proxies `/api` requests directly to this port. |
 | Probe says to use `postgresql+psycopg` | Change the copied URI's scheme to `postgresql+psycopg://`. |
 | `sqlalchemy.dialects:driver` error | Use the committed Alembic environment; it reads DATABASE_URL instead of the generated INI placeholder. |
 | Duplicate enum CHECK during migration | Use the corrected revision 0001, which declares each enum CHECK once. |

@@ -40,7 +40,7 @@ class ArticleExtractionPolicy(BaseModel):
             raise ValueError("Article content selector must be valid CSS") from None
         return self
 
-
+ 
 class SourceConfig(BaseModel):
     """Policy metadata stays in JSON; only existing Source columns are seeded."""
 

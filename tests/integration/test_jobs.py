@@ -52,6 +52,8 @@ def pipeline(migrated_database, db_session, api_article):
             "official_rss_url": "https://example.com/rss",
             "robots_url": "https://example.com/robots.txt",
             "allowed_hosts": ["example.com"],
+            "article_extraction_allowed": False,
+            "article_extraction": None,
             "ai_processing_allowed": True,
             "ai_processing_review_note": "Authored fixture text.",
         }
@@ -406,8 +408,8 @@ def test_result_counter_and_summary_roll_back_together_and_replay_is_safe(pipeli
         assert not persist_summary(session, result, job_id=job_id, **worker.model_names)
     job = read_job(worker, job_id)
     assert job.articles_processed == 1
-    assert job.articles_summarized == int(approved)
-    assert job.articles_needs_review == int(not approved)
+    assert job.articles_summarized == 1
+    assert job.articles_needs_review == 0
 
 
 def test_insertion_counter_rolls_back_with_article(pipeline):

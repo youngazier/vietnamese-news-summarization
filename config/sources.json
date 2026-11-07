@@ -12,8 +12,16 @@
     "attribution": "Nguồn: VnExpress",
     "review_status": "rss_reader_supported",
     "review_note": "Personal nonprofit RSS reader with attribution; honor cessation requests.",
-    "article_extraction_allowed": false,
-    "ai_processing_allowed": false,
+    "article_extraction_allowed": true,
+    "article_extraction": {
+      "public_path_prefixes": [
+        "/"
+      ],
+      "content_selector": "article.fck_detail",
+      "review_note": "User-authorized public article extraction for personal daily reader."
+    },
+    "ai_processing_allowed": true,
+    "ai_processing_review_note": "User-authorized local ViT5 and Gemini summarization for personal daily reader.",
     "availability": {
       "official_link": true,
       "status": 200,
@@ -37,8 +45,16 @@
     "attribution": "Nguồn: Tuổi Trẻ",
     "review_status": "rss_reader_supported",
     "review_note": "Personal nonprofit RSS reader with attribution; honor cessation requests.",
-    "article_extraction_allowed": false,
-    "ai_processing_allowed": false,
+    "article_extraction_allowed": true,
+    "article_extraction": {
+      "public_path_prefixes": [
+        "/"
+      ],
+      "content_selector": "div.detail-content",
+      "review_note": "User-authorized public article extraction for personal daily reader."
+    },
+    "ai_processing_allowed": true,
+    "ai_processing_review_note": "User-authorized local ViT5 and Gemini summarization for personal daily reader.",
     "availability": {
       "official_link": true,
       "status": 200,

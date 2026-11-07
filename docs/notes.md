@@ -33,6 +33,238 @@ session = factory()
 
 ---
 
+# 17/10 - Phase 3: RSS feed -> DB Articles
+
+## RSS
+RSS = **Really Simple Syndication** - a structured feed that a website publishes so applications can discover new content automatically.
+
+Instead of opening a news homepage and inspecting its HTML, your application requests a feed such as:
+```
+https://vnexpress.net/rss/tin-moi-nhat.rss
+```
+The response is **XML**, containing a list of published items: A simplified example:
+```xml
+<rss version="2.0">
+  <channel>
+    <title>Publisher’s latest news</title>
+    <link>https://publisher.example/</link>
+    <description>Latest articles</description>
+
+    <item>
+      <title>New community library opens</title>
+      <link>https://publisher.example/news/library-123</link>
+      <description>A short introduction to the article...</description>
+      <pubDate>Sat, 17 Oct 2026 08:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
+```
+
+A feed typically contains a recent window of articles, rather than the publisher's complete archieve. An application checks it periodically to discover updates; RSS does not automatically push each article to your application.
+
+In this project, the flow is:
+```
+Request RSS URL
+    → receive XML bytes
+    → parse with feedparser
+    → create FeedEntry objects
+    → insert new articles into PostgreSQL
+```
+
+
+---
+
+# Pydantic
+Pydantic is the project's data validation and serialization layer. It helps answer three questions:
+1. Does incoming data have the excepted structure and values?
+2. Can we turn it into useful Python objects?
+3. Can we turn those objects into dictionaries, JSON, or a schema describing the expected data?
+
+## `BaseModel` - define a validated data structure
+A regular Python type hint does not automatically validate values:
+```python
+def collect(limit: int):
+    return limit
+
+collect("twenty") # Python itself does not enforce the annotation
+```
+
+A Pydantic model does:
+```python
+from pydantic import BaseModel
+
+class CollectionOptions(BaseModel):
+    limit: int
+
+options = CollectionOptions(limit=20)
+print(options.limit) # 20
+```
+Invalid data raises `ValidationError`:
+```python
+CollectionOptions(limit="twenty")
+```
+By default, Pydantic can convert compatible values:
+```python
+options = CollectionOptions(limit="20")
+print(options.limit) # 20
+print(type(options.limit)) # <class 'int'>
+```
+
+## `ConfigDict` - configure how the model behaves
+Phase 3 uses: `model_config = ConfigDict(extra="forbid", strict=True)`
+- `model_config` is a special configuration attribute recognized by Pydantic. These settings apply to the model.
+- `extra="forbid"` rejects unexpected fields
+```python
+from pydantic import BaseModel, ConfigDict
+
+class Options(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    limit: int
+
+Options(limit=20, limti=30)  # ValidationError: unexpected "limti"
+```
+- `strict=True` prevents many automatic type conversions:
+```python
+class StrictOptions(BaseModel):
+    model_config = ConfigDict(strict=True)
+    limit: int
+
+StrictOptions(limit=20)    # Valid
+StrictOptions(limit="20")  # ValidationError
+```
+### Note: JSON validation vs. Python-object validation
+JSON has no native data type, so a data string such as `"2026-10-18"` can be accepted for a `date` field during JSON validation. Strict validation of a Python dictionary generally expects an actual `date` object for that field.
+
+That matters when choosing between `model_validate()` and `model_validate_json()` later.
+
+## `Field` - add constraints, defaults, and field metadata
+Example 1: `name: str = Field(min_length=1, max_length=120)`
+
+Example 2: `attempts: int = Field(ge=1, le=2)`
+
+The main numeric constraints are:
+
+|Argument|Meaning|
+|-|-|
+|`gt=0`|Greater than zero|
+|`ge=1`|Greater than or equal to one|
+|`lt=10`|Less than ten|
+|`le=2`|Less than or equal to two|
+
+## `@model_validator` - validate relationships between fields
+Fields contraints handle individual values. Some rules depend on multiple fields.
+
+My `SourceConfig` needs rules such as:
+```
+If extraction is enabled:
+    the source must be active
+    an extraction policy must exist
+```
+That is why it uses:
+```python
+@model_validator(mode="after")
+def validate_review(self) -> "SourceConfig":
+    ...
+    return self
+```
+- `model="after"` means the individual fields have already been validated, so the method can inspect their parsed values through `self`.
+
+Here is a simplified example:
+```python
+from pydantic import BaseModel, model_validator
+
+class ExtractionOptions(BaseModel):
+    enabled: bool
+    selector: str | None = None
+
+    @model_validator(mode="after")
+    def require_selector(self) -> "ExtractionOptions":
+        if self.enabled and not self.selector:
+            raise ValueError("Enabled extraction requires a selector")
+        return self
+```
+
+```python
+ExtractionOptions(enabled=False)  # Valid
+
+ExtractionOptions(
+    enabled=True,
+    selector="article.news-body",
+)  # Valid
+
+ExtractionOptions(enabled=True)  # ValidationError
+```
+
+The same pattern appears ion `ReviewResult`:
+```python
+if not self.approved and not self.feedback:
+    raise ValueError("Rejected drafts require feedback")
+```
+
+
+## `@field_validator` - apply custom validation to one field
+
+Example: The AI schema uses this for keywords:
+```python
+@field_validator("keywords")
+@classmethod
+def distinct_keywords(cls, keywords: list[str]) -> list[str]:
+    normalized = [
+        unicodedata.normalize("NFC", keyword)
+        for keyword in keywords
+    ]
+
+    if len({keyword.casefold() for keyword in normalized}) != len(normalized):
+        raise ValueError("Keywords must be distinct")
+
+    return normalized
+```
+This function:
+1. Receives the validated keyword list.
+2. Normalizes Unicode representations.
+3. Checks for case-insensitive duplicates.
+4. Returns the normalized list.
+
+For example:
+```python
+ArticleMetadata(
+    category="technology",
+    keywords=["AI", "ai", "Dữ liệu"],
+)
+```
+is rejected because `"AI"` and `"ai"` are treated as duplicated.
+
+The return value becomes the field's value. A validator can therefore both check and normalize data.
+
+`@classmethod` is a Python feature, not a Pydantic import. It supplies the class as `cls`; there is no completed instance to receive as `self` in this field validator.
+
+The practical choice is:
+
+|Requirement|Use|
+|-|-|
+|Check or normalize one field|`field_validator`|
+|Check relationships across fields|`model_validator`|
+
+## `TypeAdapter` - validate a type without creating a wrapper model
+Phase 3 needs to validatae a JSON array:
+```json
+[
+  {"name": "Source A", "...": "..."},
+  {"name": "Source B", "...": "..."}
+]
+```
+The outer structure is a `list[SourceConfig]`, not a single `SourceConfig`.
+
+The code uses: `TypeAdapter(list[SourceConfig]).validate_json(json_text)`
+
+This validates:
+- The outer list
+- Every source object
+- Each nested extraction policy
+- All applicable custom validators
+
+
+
 
 
 

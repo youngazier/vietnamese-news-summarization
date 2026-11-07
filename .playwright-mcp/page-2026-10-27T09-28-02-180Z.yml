@@ -1,0 +1,50 @@
+- generic [ref=f20e2]:
+  - link "Đến nội dung chính" [ref=f20e3] [cursor=pointer]:
+    - /url: "#noi-dung"
+  - banner [ref=f20e4]:
+    - generic [ref=f20e5]:
+      - generic [ref=f20e6]: Một góc nhìn, nhiều câu chuyện.
+      - generic [ref=f20e7]: Ấn bản trải nghiệm • Tiếng Việt
+    - generic [ref=f20e8]:
+      - link "Góc Việt — Trang chủ" [ref=f20e9] [cursor=pointer]:
+        - /url: "#"
+        - text: gócviệt.
+      - navigation "Điều hướng chính" [ref=f20e10]:
+        - link "Khám phá" [ref=f20e11] [cursor=pointer]:
+          - /url: "#tin-moi"
+        - link "Chính trị" [ref=f20e12] [cursor=pointer]:
+          - /url: "#tin-moi"
+        - link "Xã hội" [ref=f20e13] [cursor=pointer]:
+          - /url: "#tin-moi"
+        - link "Về Góc Việt" [ref=f20e14] [cursor=pointer]:
+          - /url: "#ve-goc-viet"
+      - search [ref=f20e19]:
+        - searchbox "Tìm kiếm tin tức" [ref=f20e20]
+  - main [ref=f20e21]:
+    - region [ref=f20e22]:
+      - generic [ref=f20e23]:
+        - generic [ref=f20e24]: ĐỌC CHẬM. HIỂU SÂU.
+        - heading "Việt Nam, qua từng câu chuyện." [level=1] [ref=f20e26]
+        - paragraph [ref=f20e27]: Những tin tức đáng đọc. Những góc nhìn đáng nghĩ.
+      - generic [ref=f20e31]:
+        - text: Gói gọn thông tin
+        - strong [ref=f20e32]: Mở rộng góc nhìn
+    - group "Lọc theo chuyên mục" [ref=f20e34]:
+      - button "Tất cả" [pressed] [ref=f20e35]
+      - button "Chính trị" [ref=f20e36]
+      - button "Kinh tế" [ref=f20e37]
+      - button "Công nghệ" [ref=f20e38]
+      - button "Xã hội" [ref=f20e39]
+      - button "Thể thao" [ref=f20e40]
+      - button "Khác" [ref=f20e41]
+    - status "Đang tải tin tức" [ref=f20e42]:
+      - generic [ref=f20e43]: Đang tải tin tức…
+    - separator [ref=f20e61]
+    - generic [ref=f20e62]:
+      - generic [ref=f20e63]:
+        - link "gócviệt." [ref=f20e64] [cursor=pointer]:
+          - /url: "#"
+        - paragraph [ref=f20e65]: Đọc để hiểu. Hiểu để kết nối.
+      - generic [ref=f20e66]:
+        - generic [ref=f20e67]: Một không gian cho những câu chuyện Việt Nam.
+        - generic [ref=f20e68]: Tin từ nguồn báo · Tóm tắt bằng AI chỉ hiển thị khi đã được duyệt.

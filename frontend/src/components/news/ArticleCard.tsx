@@ -97,7 +97,7 @@ export function ArticleCard({
           <p>{article.summary}</p>
         ) : (
           <p className="processing-note">
-            {statusLabels[article.status]} · Chưa có bản tóm tắt được duyệt.
+            {statusLabels[article.status]} · Chưa có bản tóm tắt.
           </p>
         )}
         <ArticleMeta article={article} />

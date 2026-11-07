@@ -12,7 +12,12 @@ from app.main import app
 from app.models import Article, ContentOrigin, ProcessingStatus, Source
 from app.seed_sources import ArticleExtractionPolicy, SourceConfig, load_source_config
 from app.services.article_extractor import ArticleExtractor
-from app.services.ingestion import ingest_entries, insert_article, prepare_pending_articles
+from app.services.ingestion import (
+    ingest_entries,
+    insert_article,
+    prepare_pending_articles,
+    recover_review_articles,
+)
 from app.services.rss_collector import FeedEntry, parse_feed
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select, text
@@ -165,6 +170,10 @@ def preparation_config() -> SourceConfig:
                 "official_rss_url": "https://example.com/rss",
                 "robots_url": "https://example.com/robots.txt",
                 "allowed_hosts": ["example.com"],
+                "article_extraction_allowed": False,
+                "article_extraction": None,
+                "ai_processing_allowed": False,
+                "ai_processing_review_note": None,
             }
         ).model_dump_json()
     )
@@ -235,6 +244,112 @@ def test_prepare_short_excerpt_and_old_backlog_respects_limit(
         assert row.content_origin == ContentOrigin.RSS_EXCERPT
         assert row.processing_status == ProcessingStatus.NEEDS_REVIEW
         assert row.processing_error == "extraction_disabled; insufficient_text"
+
+
+def test_old_review_excerpt_recovers_from_permitted_full_text(
+    db_session, migrated_database, feed_entries, preparation_config
+):
+    entry = replace(feed_entries[0], rss_description="Trích đoạn ngắn.")
+    with db_session.begin():
+        article_id = insert_article(db_session, entry)
+    factory = sessionmaker(bind=migrated_database.connection, expire_on_commit=False)
+    with httpx.Client(transport=httpx.MockTransport(no_publisher_request)) as client:
+        extractor = ArticleExtractor(client, sleep=lambda _: None)
+        prepare_pending_articles(factory, entry.source_id, preparation_config, extractor)
+        assert (
+            recover_review_articles(
+                factory, entry.source_id, preparation_config, extractor
+            ).prepared_ids
+            == ()
+        )
+
+    config = preparation_config.model_copy(
+        update={
+            "article_extraction_allowed": True,
+            "article_extraction": ArticleExtractionPolicy(
+                public_path_prefixes=["/news"],
+                content_selector="article.news-body",
+                review_note="Fictional HTML fixture, permitted by test only.",
+            ),
+            "ai_processing_allowed": True,
+            "ai_processing_review_note": "Fictional test article only.",
+        }
+    )
+    payload = (
+        Path(__file__).resolve().parents[1] / "fixtures/html/public_article.html"
+    ).read_bytes()
+    requests = []
+
+    def handler(request):
+        assert not migrated_database.connection.in_transaction()
+        requests.append(request.url.path)
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nAllow: /\n")
+        return httpx.Response(200, content=payload, headers={"Content-Type": "text/html"})
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        extractor = ArticleExtractor(client, sleep=lambda _: None)
+        recovered = recover_review_articles(factory, entry.source_id, config, extractor)
+        repeated = recover_review_articles(factory, entry.source_id, config, extractor)
+    assert recovered.prepared_ids == (article_id,)
+    assert recovered.pending == 1 and recovered.needs_review == 0
+    assert repeated.prepared_ids == ()
+    assert requests == ["/robots.txt", "/news"]
+    with db_session.begin():
+        db_session.expire_all()
+        article = db_session.get(Article, article_id)
+        assert article.processing_status == ProcessingStatus.PENDING
+        assert article.content_origin == ContentOrigin.EXTRACTED
+        assert len(article.content) >= 200
+        assert article.processing_error is None
+
+
+def test_review_recovery_records_failed_extraction_once(
+    db_session, migrated_database, feed_entries, preparation_config
+):
+    entry = replace(feed_entries[0], rss_description="Trích đoạn ngắn.")
+    with db_session.begin():
+        article_id = insert_article(db_session, entry)
+    factory = sessionmaker(bind=migrated_database.connection, expire_on_commit=False)
+    with httpx.Client(transport=httpx.MockTransport(no_publisher_request)) as client:
+        prepare_pending_articles(
+            factory,
+            entry.source_id,
+            preparation_config,
+            ArticleExtractor(client, sleep=lambda _: None),
+        )
+    config = preparation_config.model_copy(
+        update={
+            "article_extraction_allowed": True,
+            "article_extraction": ArticleExtractionPolicy(
+                public_path_prefixes=["/news"],
+                content_selector="article.news-body",
+                review_note="Fictional HTML fixture, permitted by test only.",
+            ),
+            "ai_processing_allowed": True,
+            "ai_processing_review_note": "Fictional test article only.",
+        }
+    )
+    requests = []
+
+    def handler(request):
+        requests.append(request.url.path)
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nAllow: /\n")
+        return httpx.Response(403)
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        extractor = ArticleExtractor(client, sleep=lambda _: None)
+        first = recover_review_articles(factory, entry.source_id, config, extractor)
+        second = recover_review_articles(factory, entry.source_id, config, extractor)
+    assert first.needs_review == 1 and second.prepared_ids == ()
+    assert requests == ["/robots.txt", "/news"]
+    with db_session.begin():
+        db_session.expire_all()
+        article = db_session.get(Article, article_id)
+        assert article.processing_status == ProcessingStatus.NEEDS_REVIEW
+        assert article.content == entry.rss_description
+        assert article.processing_error == "access_denied; insufficient_text"
 
 
 @pytest.mark.parametrize(

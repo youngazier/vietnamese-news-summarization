@@ -96,7 +96,7 @@ export function ArticleReader({ article }: { article: Article }) {
         </div>
       ) : approved ? (
         <>
-          <Badge variant="secondary">Tóm tắt bằng AI · Đã được duyệt</Badge>
+          <Badge variant="secondary">Tóm tắt bằng AI</Badge>
           <p className="reader-body">{detail.summary!.summary_text}</p>
           <div className="flex flex-wrap gap-2" aria-label="Từ khóa">
             {detail.summary!.keywords.map((keyword) => (
@@ -111,7 +111,7 @@ export function ArticleReader({ article }: { article: Article }) {
           {detail.review_decision === "decline"
             ? "Đã từ chối"
             : statusLabels[detail.processing_status]}
-          . Bài viết chưa có bản tóm tắt được duyệt. Mời bạn đọc nội dung đầy đủ
+          . Bài viết chưa có bản tóm tắt. Mời bạn đọc nội dung đầy đủ
           tại nguồn.
         </p>
       )}

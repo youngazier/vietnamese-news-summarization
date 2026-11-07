@@ -14,9 +14,13 @@ CONFIG = ROOT / "config" / "sources.json"
 def test_committed_source_configuration() -> None:
     sources = load_source_config(CONFIG)
     assert len(sources) == 3
-    assert [source.name for source in sources if source.is_active] == ["VnExpress", "Tuổi Trẻ"]
-    assert all(not source.article_extraction_allowed for source in sources)
-    assert all(not source.ai_processing_allowed for source in sources)
+    active = [source for source in sources if source.is_active]
+    assert [source.name for source in active] == ["VnExpress", "Tuổi Trẻ"]
+    assert all(source.article_extraction_allowed for source in active)
+    assert all(source.ai_processing_allowed for source in active)
+    inactive = [source for source in sources if not source.is_active]
+    assert all(not source.article_extraction_allowed for source in inactive)
+    assert all(not source.ai_processing_allowed for source in inactive)
 
 
 @pytest.mark.parametrize(
@@ -46,7 +50,13 @@ def test_committed_source_configuration() -> None:
     ],
 )
 def test_reject_unsafe_configuration(tmp_path: Path, change: dict) -> None:
-    source = json.loads(CONFIG.read_text())[0]
+    source = {
+        **json.loads(CONFIG.read_text())[0],
+        "article_extraction_allowed": False,
+        "article_extraction": None,
+        "ai_processing_allowed": False,
+        "ai_processing_review_note": None,
+    }
     path = tmp_path / "sources.json"
     path.write_text(json.dumps([{**source, **change}]))
     with pytest.raises(ValidationError):

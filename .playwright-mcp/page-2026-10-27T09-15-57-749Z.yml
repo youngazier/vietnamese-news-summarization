@@ -1,0 +1,50 @@
+- generic [ref=f4e2]:
+  - link "Đến nội dung chính" [ref=f4e3] [cursor=pointer]:
+    - /url: "#noi-dung"
+  - banner [ref=f4e4]:
+    - generic [ref=f4e5]:
+      - generic [ref=f4e6]: Một góc nhìn, nhiều câu chuyện.
+      - generic [ref=f4e7]: Ấn bản trải nghiệm • Tiếng Việt
+    - generic [ref=f4e8]:
+      - link "Góc Việt — Trang chủ" [ref=f4e9] [cursor=pointer]:
+        - /url: "#"
+        - text: gócviệt.
+      - navigation "Điều hướng chính" [ref=f4e10]:
+        - link "Khám phá" [ref=f4e11] [cursor=pointer]:
+          - /url: "#tin-moi"
+        - link "Thời sự" [ref=f4e12] [cursor=pointer]:
+          - /url: "#tin-moi"
+        - link "Đời sống" [ref=f4e13] [cursor=pointer]:
+          - /url: "#tin-moi"
+        - link "Về Góc Việt" [ref=f4e14] [cursor=pointer]:
+          - /url: "#ve-goc-viet"
+      - search [ref=f4e19]:
+        - searchbox "Tìm kiếm tin tức" [ref=f4e20]
+  - main [ref=f4e21]:
+    - region [ref=f4e22]:
+      - generic [ref=f4e23]:
+        - generic [ref=f4e24]: ĐỌC CHẬM. HIỂU SÂU.
+        - heading "Việt Nam, qua từng câu chuyện." [level=1] [ref=f4e26]
+        - paragraph [ref=f4e27]: Những tin tức đáng đọc. Những góc nhìn đáng nghĩ.
+      - generic [ref=f4e31]:
+        - text: Gói gọn thông tin
+        - strong [ref=f4e32]: Mở rộng góc nhìn
+    - group "Lọc theo chuyên mục" [ref=f4e34]:
+      - button "Tất cả" [pressed] [ref=f4e35]
+      - button "Thời sự" [ref=f4e36]
+      - button "Kinh tế" [ref=f4e37]
+      - button "Công nghệ" [ref=f4e38]
+      - button "Đời sống" [ref=f4e39]
+      - button "Văn hóa" [ref=f4e40]
+      - button "Du lịch" [ref=f4e41]
+    - status "Đang tải tin tức" [ref=f4e42]:
+      - generic [ref=f4e43]: Đang tải tin tức…
+    - separator [ref=f4e61]
+    - generic [ref=f4e62]:
+      - generic [ref=f4e63]:
+        - link "gócviệt." [ref=f4e64] [cursor=pointer]:
+          - /url: "#"
+        - paragraph [ref=f4e65]: Đọc để hiểu. Hiểu để kết nối.
+      - generic [ref=f4e66]:
+        - generic [ref=f4e67]: Một không gian cho những câu chuyện Việt Nam.
+        - generic [ref=f4e68]: Bản mẫu giao diện · Nội dung minh họa, không phải tin trực tiếp.

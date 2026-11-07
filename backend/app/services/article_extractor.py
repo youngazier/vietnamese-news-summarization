@@ -11,6 +11,7 @@ from urllib.robotparser import RobotFileParser
 import httpx
 from app.models import ContentOrigin
 from app.seed_sources import SourceConfig
+from app.services.article_images import image_from_html
 from app.services.rss_collector import (
     HTTP_TIMEOUT_SECONDS,
     MAX_HTTP_ATTEMPTS,
@@ -42,6 +43,7 @@ class ExtractionResult:
     content_origin: ContentOrigin | None
     usable: bool
     failure_reason: str | None = None
+    image_url: str | None = None
 
 
 class ExtractionError(Exception):
@@ -179,6 +181,32 @@ class ArticleExtractor:
             self._robots[source.robots_url] = parser
         return self._robots[source.robots_url]
 
+    def fetch_image_metadata(self, url: str, source: SourceConfig) -> str | None:
+        """Opt-in metadata backfill, independent of full-text extraction and AI processing.
+
+        Read only metadata from a stored article URL. Keep the same request limits,
+        reviewed host boundary and robots checks as source-text extraction.
+        """
+        if not source.is_active or source.review_status != "rss_reader_supported":
+            return None
+        try:
+            robots = self._robots_for(source)
+
+            def validate(destination: str) -> None:
+                try:
+                    validate_source_url(destination, source.allowed_hosts)
+                except FeedFetchError:
+                    raise ExtractionError("url_blocked") from None
+                if urlsplit(destination).hostname != urlsplit(source.robots_url).hostname:
+                    raise ExtractionError("url_blocked")
+                if not robots.can_fetch(USER_AGENT, destination):
+                    raise ExtractionError("robots_blocked")
+
+            payload = self._fetch(url, max_bytes=MAX_HTML_BYTES, validate=validate, html=True)
+            return image_from_html(payload, url)
+        except ExtractionError:
+            return None
+
     def extract(
         self,
         url: str,
@@ -192,6 +220,7 @@ class ArticleExtractor:
         failure = None
         text = ""
         origin = None
+        image = None
         if not source.is_active or source.review_status != "rss_reader_supported":
             # No fallback reuse for an inactive/unreviewed source.
             result = ExtractionResult(None, None, False, "source_not_permitted")
@@ -208,6 +237,9 @@ class ArticleExtractor:
                         raise ExtractionError("robots_blocked")
 
                 payload = self._fetch(url, max_bytes=MAX_HTML_BYTES, validate=validate, html=True)
+                image = image_from_html(
+                    payload, url, content_selector=source.article_extraction.content_selector
+                )
                 text = clean_text(payload, selector=source.article_extraction.content_selector)
                 if not text:
                     raise ExtractionError("missing_article_body")
@@ -222,7 +254,7 @@ class ArticleExtractor:
             usable = len(text) >= MIN_TEXT_CHARACTERS
             if not usable:
                 failure = f"{failure}; {'insufficient_text' if text else 'missing_text'}"
-            result = ExtractionResult(text or None, origin, usable, failure)
+            result = ExtractionResult(text or None, origin, usable, failure, image)
         logger.info(
             "Article source text evaluated source_id=%s article_id=%s job_id=%s failure_class=%s",
             source_id,

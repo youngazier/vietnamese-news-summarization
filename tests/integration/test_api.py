@@ -182,6 +182,7 @@ def test_fixture_article_read_endpoints(client: TestClient, api_article: Article
     card = page["items"][0]
     assert card["id"] == api_article.id
     assert card["title"] == api_article.title
+    assert card["image_url"] is None
     assert card["source"] == sources[0]
     assert card["published_at"] is None
     assert datetime.fromisoformat(card["created_at"]) == api_article.created_at
@@ -316,3 +317,13 @@ def test_database_failure_returns_redacted_503() -> None:
     }
     assert secret not in response.text
     assert "SELECT secret" not in response.text
+
+
+def test_article_image_is_visible_without_an_approved_summary(client, db_session, api_article):
+    with db_session.begin():
+        api_article.image_url = "https://cdn.example.com/lead.jpg"
+    detail = client.get(f"/api/v1/articles/{api_article.id}").json()
+    listing = client.get("/api/v1/articles").json()["items"][0]
+    assert detail["image_url"] == listing["image_url"] == api_article.image_url
+    assert detail["summary"] is None
+    assert detail["ai_generated"] is False

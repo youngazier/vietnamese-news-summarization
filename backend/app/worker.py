@@ -24,6 +24,7 @@ from app.services.ingestion import (
     ingest_entries,
     prepare_pending_articles,
     process_article,
+    recover_review_articles,
     require_active_source,
 )
 from app.services.job_service import (
@@ -109,6 +110,16 @@ class Worker:
     def process_pending(self, job_id: int, source_id: int, config: SourceConfig) -> None:
         _, remaining = self.remaining(job_id)
         if not remaining or self.stop.is_set():
+            return
+        recover_review_articles(
+            self.factory,
+            source_id,
+            config,
+            self.extractor,
+            max_articles=remaining,
+            should_stop=self.stop.is_set,
+        )
+        if self.stop.is_set():
             return
         with self.factory() as session:
             query = select(Article.id).where(

@@ -4,11 +4,13 @@ from sqlalchemy.exc import OperationalError
 
 from app.api.articles import router as articles_router
 from app.api.ingestion_jobs import router as ingestion_jobs_router
+from app.api.reviews import router as reviews_router
 from app.api.sources import router as sources_router
 
 app = FastAPI(title="Vietnamese News Summarization API", version="0.1.0")
 app.include_router(sources_router, prefix="/api/v1")
 app.include_router(articles_router, prefix="/api/v1")
+app.include_router(reviews_router, prefix="/api/v1")
 app.include_router(ingestion_jobs_router, prefix="/api/v1")
 
 
