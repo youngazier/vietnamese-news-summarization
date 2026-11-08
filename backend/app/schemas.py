@@ -28,7 +28,6 @@ class ArticleCard(BaseModel):
     title: str
     original_url: str
     image_url: str | None
-    review_decision: Literal["accept", "decline"] | None = None
     source: SourceRead
     published_at: datetime | None
     created_at: datetime

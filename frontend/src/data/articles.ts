@@ -24,16 +24,15 @@ export interface Article {
   imageUrl: string | null;
   timestamp: string;
   collectedAt: boolean;
-  status: ProcessingStatus | "rejected";
+  status: ProcessingStatus;
   excerptOnly: boolean;
   inputTruncated: boolean;
 }
-export const statusLabels: Record<ProcessingStatus | "rejected", string> = {
+export const statusLabels: Record<ProcessingStatus, string> = {
   pending: "Chờ xử lý",
   processing: "Đang xử lý",
   ready: "Đã xử lý",
   needs_review: "Cần duyệt",
-  rejected: "Đã từ chối",
   failed: "Xử lý chưa thành công",
 };
 export function toArticle(item: ArticleRead): Article {
@@ -52,8 +51,7 @@ export function toArticle(item: ArticleRead): Article {
     imageUrl: item.image_url,
     timestamp: item.published_at ?? item.created_at,
     collectedAt: !item.published_at,
-    status:
-      item.review_decision === "decline" ? "rejected" : item.processing_status,
+    status: item.processing_status,
     excerptOnly: item.content_origin === "rss_excerpt",
     inputTruncated: approved && item.input_truncated === true,
   };

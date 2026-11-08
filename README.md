@@ -187,13 +187,50 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env python -
 
 The worker recovers unfinished jobs on startup, polls for durable jobs every 10 idle seconds, and schedules ingestion every 30 minutes. Run at most one worker instance.
 
+### Run with Docker Compose (Full Stack: Frontend, API & Worker)
+
+If you prefer to run the entire stack in containers without needing local Python or Node.js runtime environments:
+
+1. **Build the container images**:
+   ```sh
+   docker compose build
+   ```
+   > [!NOTE]
+   > - The backend build downloads and bakes the ViT5 summarization model into `/opt/models/vit5-base-vietnews-summarization` (cached in Docker layers).
+   > - The frontend build compiles the React application into static files and packages them into an Nginx web server container.
+
+2. **Run database migrations inside a container**:
+   ```sh
+   docker compose run --rm api uv run --no-sync alembic upgrade head
+   ```
+
+3. **Start all services (Frontend, API, and Worker)**:
+   ```sh
+   docker compose up -d
+   ```
+   - **`frontend`**: Nginx web server published on **<http://127.0.0.1:5173>**. It serves the React SPA and internally reverse-proxies `/api/*` requests to the `api` service.
+   - **`api`**: FastAPI backend published on **<http://127.0.0.1:8000>** (loopback). Test with `curl --fail http://127.0.0.1:8000/health`.
+   - **`worker`**: Standalone background worker with `restart: unless-stopped`, polling jobs every 10 seconds and automatically executing scheduled collection every 30 minutes.
+
+4. **Monitor logs and process status**:
+   ```sh
+   docker compose ps
+   docker compose logs -f frontend api worker
+   ```
+
+5. **Stop the containers**:
+   ```sh
+   docker compose down
+   ```
+
 ### Development Workflow Summary
 
-| Process | Working Directory | Command | URL / Port |
-| --- | --- | --- | --- |
-| **Backend API** | Repository root (`/`) | `uv run --locked uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload` | <http://127.0.0.1:8000> / <http://127.0.0.1:8000/docs> |
-| **Frontend UI** | `frontend/` | `npm run dev` | <http://127.0.0.1:5173> / <http://127.0.0.1:5173/#duyet-bai> |
-| **Worker** *(optional)* | Repository root (`/`) | `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env python -m app.worker` | Background polling process |
+| Mode | Command | Frontend URL | API / Docs URL | Worker Status |
+| --- | --- | --- | --- | --- |
+| **Full Stack (Docker)** | `docker compose up -d` | <http://127.0.0.1:5173> | <http://127.0.0.1:8000> / `.../docs` | Runs in background |
+| **Backend API (Local)** | `uv run --locked uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload` | — | <http://127.0.0.1:8000> / `.../docs` | — |
+| **Frontend UI (Local)** | `cd frontend && npm run dev` | <http://127.0.0.1:5173> | (Proxies to backend) | — |
+| **Worker (Local)** | `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env python -m app.worker` | — | — | Runs in terminal |
 
 ## 5. Create a Supabase project
 

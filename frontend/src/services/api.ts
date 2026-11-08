@@ -23,7 +23,6 @@ export interface ArticleRead {
   title: string;
   original_url: string;
   image_url: string | null;
-  review_decision: "accept" | "decline" | null;
   source: SourceRead;
   published_at: string | null;
   created_at: string;

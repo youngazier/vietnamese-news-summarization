@@ -96,12 +96,12 @@ resources. No timeout-based inference reclamation is used.
 
 ## Source permission behavior
 
-The committed configuration still allows RSS reading for VnExpress and Tuổi Trẻ,
-keeps Thanh Niên inactive, and disables publisher HTML extraction and AI processing.
-Usable RSS text therefore remains pending until an eligible AI policy is supplied;
-inadequate text becomes needs_review without inference. An active database source
+The initial Day 7 configuration allowed RSS reading for VnExpress and Tuổi Trẻ,
+kept Thanh Niên inactive, and disabled publisher HTML extraction and AI processing.
+*(Update: `config/sources.json` now enables full-text extraction and AI processing for VnExpress and Tuổi Trẻ, and the worker's `recover_review_articles()` automatically recovers older `extraction_disabled` backlog rows into `pending` for summarization.)*
+Inadequate text (`< 200` characters) still becomes `needs_review` without inference. An active database source
 missing from the selected reviewed configuration is skipped and reported as a
-source failure. The one-article Day 6 permission does not enable ongoing AI work.
+source failure.
 
 ## Verification
 

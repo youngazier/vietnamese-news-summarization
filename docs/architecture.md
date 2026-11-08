@@ -82,24 +82,24 @@ flowchart TB
     Provider[Gemini Developer API]
     DB[(Supabase PostgreSQL)]
 
-    subgraph Host[Local machine]
-      NG[Vite on loopback + API proxy]
-      subgraph Compose[Default Docker Compose: 2 Python services]
+    subgraph Host[Host / Container Environment]
+      subgraph Compose[Docker Compose: 3 services]
+        FE[frontend: Nginx + React SPA]
         API[api: FastAPI / SQLAlchemy]
         WK[worker: APScheduler + RSS + LangGraph + local ViT5]
       end
     end
 
-    Reader -->|Local HTTP| NG
-    NG -->|Static HTML/CSS/JS| Reader
-    NG -->|/api/*| API
+    Reader -->|HTTP :5173| FE
+    FE -->|Static HTML/CSS/JS| Reader
+    FE -->|Internal proxy /api/*| API
     API <-->|SQLAlchemy queries| DB
     WK <-->|Jobs, articles, summaries| DB
     Publisher -->|HTTP/RSS fetch| WK
     WK <-->|Classification / keywords / review| Provider
 ```
 
-**Interpretation:** The two Compose services are the Python `api` and `worker`, sharing one image containing the ViT5 model. Vite runs on the host, bound to loopback. Supabase and Gemini remain external managed services, so local operation still needs network access to them. Public hosting, Nginx, TLS, authentication, and authorization are deferred.
+**Interpretation:** Compose orchestrates three services: `frontend` (Nginx serving built React static assets and reverse-proxying `/api` to the backend), `api` (FastAPI), and `worker` (APScheduler, ViT5, and Gemini review), with `api` and `worker` sharing the backend image containing the ViT5 model. For host-based development, Vite can also run directly on the host and proxy to loopback. Supabase and Gemini remain external managed services.
 
 ### 3.2 Request path vs ingestion path
 
@@ -161,10 +161,21 @@ sequenceDiagram
 
 **MVP worker behavior:** one worker replica; one processing loop at a time, separate insertion/result caps (default 20 each) and configurable collection interval of 30 minutes. Poll the jobs table every 10 seconds only when useful; idle polling is acceptable for this small workload. Avoid running overlapping ingestion cycles.
 
-### 4.3 Example base `compose.yaml` (backend only)
+### 4.3 `compose.yaml` (Frontend, API and Worker)
 
 ```yaml
 services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: vietnam-news-frontend:local
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -172,6 +183,8 @@ services:
     image: vietnam-news-backend:local
     command: uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000
     env_file: [.env]
+    environment:
+      - SUMMARIZATION_MODEL_PATH=/opt/models/vit5-base-vietnews-summarization
     ports: ["127.0.0.1:8000:8000"]
     restart: unless-stopped
 
@@ -182,17 +195,17 @@ services:
     image: vietnam-news-backend:local
     command: uv run --no-sync python -m app.worker
     env_file: [.env]
+    environment:
+      - SUMMARIZATION_MODEL_PATH=/opt/models/vit5-base-vietnews-summarization
     restart: unless-stopped
 ```
 
-- Both use the **same Dockerfile/image and code**, different process entry points.
+- `api` and `worker` use the **same backend Dockerfile/image and code**, different process entry points.
+- `frontend` uses a multi-stage Dockerfile (`node:20-alpine` build + `nginx:alpine` runtime) that serves static React assets and reverse-proxies `/api/` to `http://api:8000/api/` inside the Docker network.
 - Supabase is external: **no PostgreSQL container**.
-- Vite runs on the host, bound to `127.0.0.1`; no Nginx or public deployment in the current scope.
-- `127.0.0.1:8000` host binding is intentional: the API is only directly reachable locally for the single user.
-- Development Vite can proxy `/api` to `http://localhost:8000`, avoiding unnecessary CORS complexity. Keep Vite bound to loopback; public access is deferred.
-- Use `docker compose config` to validate Compose and `docker compose logs -f api worker` for troubleshooting.
-- Run migrations separately, before relying on either service: `docker compose run --rm api uv run --no-sync alembic upgrade head`.
-- **Note:** These two containers run the backend. `docker compose up` alone does **not** start the host Vite server.
+- Both `127.0.0.1:5173` (frontend) and `127.0.0.1:8000` (API) are published on loopback.
+- Use `docker compose config` to validate Compose and `docker compose logs -f frontend api worker` for troubleshooting.
+- Run migrations separately, before relying on the services: `docker compose run --rm api uv run --no-sync alembic upgrade head`.
 
 ### 4.4 Build-time summarization model download
 
@@ -375,10 +388,13 @@ rows are preserved. Insertion and preparation have separate default limits of 20
 so newly inserted rows may wait behind older backlog.
 
 **Current boundary and verification.** The committed configuration activates
-VnExpress/Tuổi Trẻ for reviewed RSS use and leaves Thanh Niên inactive; publisher
-article extraction and AI flags remain false. HTML extraction is tested with
-fictional fixtures; live RSS fallback is documented in the [Day 4 guide](day-4-extraction.md).
-The 200-character check is provisional and does not establish factual completeness.
+VnExpress (`article.fck_detail`) and Tuổi Trẻ (`div.detail-content`) with both
+full-text article extraction and AI processing enabled (`article_extraction_allowed=true`,
+`ai_processing_allowed=true`), while leaving Thanh Niên inactive. When the worker runs,
+`recover_review_articles()` retries older excerpt-only `needs_review` rows (`extraction_disabled; ...`),
+extracts full text, and returns them to `pending` for AI summarization. All generated summaries
+are automatically marked `approved=true` and `ready` upon persistence so the reader UI
+displays summarized articles without manual review.
 Fixed HTTP fixtures and isolated PostgreSQL tests cover retries, redirects,
 deduplication races, provenance, transaction boundaries and resumable writes.
 See [Phase 3 acceptance](todos.md#phase-3--days-34-rss-and-usable-text) and
@@ -414,7 +430,7 @@ flowchart TD
 
 - One **graph invocation per article**; collection is outside the graph.
 - The graph uses deterministic orchestration: ViT5 generates summary text locally; Gemini returns category/keywords and reviews the result. Gemini does not replace ViT5 as the summarization model.
-- On a rejected draft, retry ViT5 with a bounded alternate generation strategy and recompute/review metadata. ViT5 is not a chat model: do not append Gemini feedback as instructions to the source. If a second attempt is still rejected, mark `needs_review`.
+- On a rejected draft, retry ViT5 with a bounded alternate generation strategy and recompute/review metadata. ViT5 is not a chat model: do not append Gemini feedback as instructions to the source. After the graph finishes (up to two draft attempts), `persist_summary()` auto-completes the summary (`approved=True`, `processing_status=ready`) while retaining Gemini's feedback for diagnostics.
 - The review node is **not proof of factual correctness**. Never market it as independently verified news.
 - Max **two draft attempts total**, not an unbounded loop; handle structured-output validation errors and provider failures at the worker boundary.
 - Persist results from the worker *after* the graph returns, rather than allowing arbitrary LLM-initiated DB writes.

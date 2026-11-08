@@ -108,9 +108,7 @@ export function ArticleReader({ article }: { article: Article }) {
         </>
       ) : (
         <p className="reader-body">
-          {detail.review_decision === "decline"
-            ? "Đã từ chối"
-            : statusLabels[detail.processing_status]}
+          {statusLabels[detail.processing_status]}
           . Bài viết chưa có bản tóm tắt. Mời bạn đọc nội dung đầy đủ
           tại nguồn.
         </p>
