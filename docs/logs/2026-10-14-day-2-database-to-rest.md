@@ -1,6 +1,6 @@
 # Day 2 guide: save an article in PostgreSQL and read it through FastAPI
 
-Updated: 2026-10-15. D2.1–D2.12 remain complete. This guide records the Day 2 state; D3.2–D3.9 have since added source configuration, RSS collection and deduplicated persistence. See [todos.md](todos.md) for current progress.
+Updated: 2026-10-15. D2.1–D2.12 remain complete. This guide records the Day 2 state; D3.2–D3.9 have since added source configuration, RSS collection and deduplicated persistence. See [todos.md](../todos.md) for current progress.
 
 **Your goal today:** create the project's database tables in Supabase, save a test article, and return it through these three endpoints:
 
@@ -62,7 +62,7 @@ The repository was inspected for this guide. Current status:
 | D2.11: API tests | Complete; 14 API cases passed | Covers filters/order/page, 404/422/503, redaction, and summary visibility. |
 | D2.12: setup record | Complete | README records session-pooler mode, head `0002`, seeding, read commands, and final results. |
 
-Follow the steps below in order. Tick tasks in [todos.md](todos.md#phase-2--day-2-database-to-rest) only after their checks pass.
+Follow the steps below in order. Tick tasks in [todos.md](../archived/14-day-plan-2026-11-08.md#phase-2--day-2-database-to-rest) only after their checks pass.
 
 ### Run now: verify the existing foundation
 
@@ -88,7 +88,7 @@ This proves Python can understand the model relationships. It does **not** conne
 
 ## 3. Run now: connect to your Supabase development database
 
-If you already completed [README's database setup](../README.md#5-create-a-supabase-project), keep your existing `.env` and run the probe at the end of this section.
+If you already completed [README's database setup](../../README.md#5-create-a-supabase-project), keep your existing `.env` and run the probe at the end of this section.
 
 Otherwise:
 
@@ -239,7 +239,7 @@ Open the migration file and review it before applying:
 - `downgrade()` removes children before parents, so foreign keys do not block removal.
 - There are no seed rows and no operations that remove unrelated existing tables or modify Supabase-managed objects.
 
-Autogeneration needs manual review, especially for CHECK constraints. Compare the file with the existing models and [database contract](todos.md#database-contract). If unrelated objects appear, fix the migration scope before applying. See [Alembic's autogeneration limitations](https://alembic.sqlalchemy.org/en/latest/autogenerate.html).
+Autogeneration needs manual review, especially for CHECK constraints. Compare the file with the existing models and [database contract](../archived/14-day-plan-2026-11-08.md#database-contract). If unrelated objects appear, fix the migration scope before applying. See [Alembic's autogeneration limitations](https://alembic.sqlalchemy.org/en/latest/autogenerate.html).
 
 After review, run against your development database:
 
@@ -305,7 +305,7 @@ uv run --locked pytest -m integration tests/integration/test_migrations.py tests
 
 Use the session dependency from step 4. With this synchronous database setup, ordinary `def` routes are appropriate.
 
-Build these Pydantic response schemas from the [REST contract](todos.md#rest-contract):
+Build these Pydantic response schemas from the [REST contract](../archived/14-day-plan-2026-11-08.md#rest-contract):
 
 | Schema | Fields to return |
 | --- | --- |
@@ -352,7 +352,7 @@ At Day 2 completion, the seed command stored only an inactive VnExpress candidat
 
 A seed command inserts initial configuration rows. Make it repeatable by upserting sources using their unique `rss_url`: running it twice must not create duplicates. Keep seeds out of migration scripts.
 
-Use [source-evidence.md](source-evidence.md) to review candidate publisher feeds. It records unresolved reuse/AI-processing questions as well as feed availability. Do not label unresolved feeds as approved for collection. Until review is complete, demonstrate Day 2 with a clearly labeled fixture in the disposable test schema.
+Use [source-evidence.md](../specs/source-evidence.md) to review candidate publisher feeds. It records unresolved reuse/AI-processing questions as well as feed availability. Do not label unresolved feeds as approved for collection. Until review is complete, demonstrate Day 2 with a clearly labeled fixture in the disposable test schema.
 
 In the integration fixture, save this sort of data inside an explicit transaction:
 
@@ -448,7 +448,7 @@ After the checks succeed, update README with:
 4. The server/curl commands for the three read endpoints.
 5. The unit/integration commands and actual results.
 
-Then tick the completed D2 boxes in [todos.md](todos.md#phase-2--day-2-database-to-rest).
+Then tick the completed D2 boxes in [todos.md](../archived/14-day-plan-2026-11-08.md#phase-2--day-2-database-to-rest).
 
 Your final completion check is:
 
