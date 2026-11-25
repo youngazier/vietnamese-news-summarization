@@ -14,6 +14,7 @@ from app.seed_sources import DEFAULT_SOURCE_CONFIG, load_source_config
 from app.services.article_extractor import ArticleExtractor
 from app.services.article_processing import process_article
 from app.services.feed_ingestion import IngestionResult, ingest_entries
+from app.services.pipeline import open_pipeline
 from app.services.rss_collector import FeedError, RSSCollector
 from app.services.source_guard import require_active_source
 from app.services.text_preparation import prepare_pending_articles
@@ -67,28 +68,19 @@ def main() -> None:
                 )
                 if article_source_id != source_id:
                     raise ValueError("Article must belong to the selected source")
-            # Import/load worker dependencies only for this explicit processing path.
-            from app.agents.graph import build_news_graph
-            from app.services.gemini_service import GeminiService
-            from app.services.summary_service import get_summary_service
-
-            settings = get_settings()
-            summarizer = get_summary_service()
-            provider = GeminiService(settings)
-            try:
-                graph = build_news_graph(
-                    summarizer, provider, max_attempts=settings.MAX_GRAPH_DRAFT_ATTEMPTS
-                )
+            with open_pipeline(get_settings()) as (
+                graph,
+                summarize_model_name,
+                agent_model_name,
+            ):
                 changed = process_article(
                     factory,
                     args.process_article_id,
                     config,
                     graph,
-                    summarize_model_name=summarizer.model_id,
-                    agent_model_name=provider.model_id,
+                    summarize_model_name=summarize_model_name,
+                    agent_model_name=agent_model_name,
                 )
-            finally:
-                provider.close()
             print(json.dumps({"article_id": args.process_article_id, "changed": changed}))
             return
 
