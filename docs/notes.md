@@ -308,7 +308,7 @@ This validates:
 - `rss_collector.py` uses an explicit user agent, a 15-second HTTP timeout, a shared three-request retry/redirect budget, bounded backoff, a 2 MiB decoded-body limit and exact-host redirect validation.
 - Feed parsing produces cleaned title/link/optional date/RSS description records. Invalid entries are skipped, malformed feeds fail explicitly and valid empty feeds succeed.
 - URL normalization removes fragments, default ports and known tracking parameters while preserving path/query distinctions that may identify different articles.
-- `ingestion.py` uses PostgreSQL `ON CONFLICT DO NOTHING RETURNING id`; duplicates preserve existing rows and do not consume the 20-new-article cap. Network work occurs outside the write transaction.
+- `feed_ingestion.py` uses PostgreSQL `ON CONFLICT DO NOTHING RETURNING id`; duplicates preserve existing rows and do not consume the 20-new-article cap. Network work occurs outside the write transaction.
 - Five hosted ingestion tests cover repeat ingestion, REST visibility, preservation of an existing processed row, insertion-cap behavior, rollback and a two-session race. The complete suite passed 127 tests.
 - Live VnExpress verification parsed 51 usable entries, inserted 20, replayed those 20 with zero new rows, and returned the pending article through source/list/detail REST calls.
 - D4 is next: evaluate permitted extraction or RSS fallback, persist source-text provenance and reject inadequate text without an AI call.

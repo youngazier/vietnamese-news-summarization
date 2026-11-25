@@ -370,8 +370,8 @@ flowchart LR
 | Configure and seed | [`seed_sources.py`](../backend/app/seed_sources.py): `SourceConfig`, `ArticleExtractionPolicy`, `load_source_config()`, `seed_sources()` | Pydantic validates `config/sources.json` before DB access. `SourceConfig` holds feed/review settings; its optional extraction policy holds public path prefixes, a CSS content selector and a review note. Seed only `name`, `rss_url`, `is_active`; upsert by RSS URL. Other policy fields stay in JSON. |
 | Fetch and parse | [`rss_collector.py`](../backend/app/services/rss_collector.py): `RSSCollector.collect()` → `fetch()` → `parse_feed()` | Return `FeedEntry` dataclasses. Clean title/description HTML; skip missing titles and invalid/unreviewed links. Convert known dates to UTC, otherwise NULL. Reject malformed feeds; a valid empty feed succeeds. |
 | Establish identity | [`url_normalization.py`](../backend/app/services/url_normalization.py): `normalize_url()` | Lowercase scheme/host; remove default ports, fragments and known tracking parameters. Preserve path differences and identifying query parameters. Store both original and canonical URLs. |
-| Insert metadata | [`ingestion.py`](../backend/app/services/ingestion.py): `ingest_entries()` → `insert_article()` | PostgreSQL canonical-URL uniqueness plus `ON CONFLICT DO NOTHING RETURNING id` makes duplicates no-ops, including concurrent inserts. Duplicates consume no insertion capacity and never overwrite existing articles. |
-| Prepare text | `prepare_pending_articles()` → [`ArticleExtractor.extract()`](../backend/app/services/article_extractor.py) | Select oldest source rows with status `pending`, NULL content and NULL origin. Attempt enabled public-HTML extraction; fall back to permitted RSS descriptions when disabled, unavailable or inadequate. Remove markup/noise and retain at most 20,000 characters. |
+| Insert metadata | [`feed_ingestion.py`](../backend/app/services/feed_ingestion.py): `ingest_entries()` → `insert_article()` | PostgreSQL canonical-URL uniqueness plus `ON CONFLICT DO NOTHING RETURNING id` makes duplicates no-ops, including concurrent inserts. Duplicates consume no insertion capacity and never overwrite existing articles. |
+| Prepare text | [`text_preparation.py`](../backend/app/services/text_preparation.py): `prepare_pending_articles()` → [`ArticleExtractor.extract()`](../backend/app/services/article_extractor.py) | Select oldest source rows with status `pending`, NULL content and NULL origin. Attempt enabled public-HTML extraction; fall back to permitted RSS descriptions when disabled, unavailable or inadequate. Remove markup/noise and retain at most 20,000 characters. |
 | Persist quality | `prepare_pending_articles()` | Save `ExtractionResult.text`, origin, status and redacted reason together. At least 200 cleaned characters stays `pending`; short/missing text becomes `needs_review`. Origin is `extracted` or `rss_excerpt`, and NULL when text is absent. |
 
 **HTTP and access rules.** Requests use an identifying user agent, a 15-second
@@ -408,8 +408,8 @@ See [Phase 3 acceptance](todos.md#phase-3--days-34-rss-and-usable-text) and
 
 ```sh
 uv run --locked --env-file .env python -m app.seed_sources
-uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --verify-repeat
-uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --prepare-only
+uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --verify-repeat
+uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --prepare-only
 ```
 
 `--verify-repeat` replays only the attempted feed slice and requires zero new
@@ -603,10 +603,16 @@ vietnamese-news-summarization/
 │   │   │   ├── summary.py
 │   │   │   └── ingestion_job.py
 │   │   ├── schemas.py             # Pydantic REST contracts
+│   │   ├── cli/
+│   │   │   └── ingest.py           # bounded manual collection/processing CLI
 │   │   ├── services/
 │   │   │   ├── rss_collector.py
 │   │   │   ├── article_extractor.py
-│   │   │   ├── ingestion.py
+│   │   │   ├── feed_ingestion.py
+│   │   │   ├── text_preparation.py
+│   │   │   ├── article_processing.py
+│   │   │   ├── source_guard.py
+│   │   │   ├── pipeline.py
 │   │   │   ├── job_service.py
 │   │   │   ├── gemini_service.py  # official SDK + JSON validation
 │   │   │   └── summary_service.py          # loads bundled ViT5 once; local inference

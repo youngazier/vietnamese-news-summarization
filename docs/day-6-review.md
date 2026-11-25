@@ -40,7 +40,7 @@ contracts, with wire tests against the locked google-genai 2.29.0 SDK.
 
 ## Processing and atomic persistence
 
-`services.ingestion.process_article` checks the active source/configuration and AI
+`services.article_processing.process_article` checks the active source/configuration and AI
 permission, claims one pending article in a short transaction, and commits before
 model/provider work. Inadequate prepared text becomes `needs_review` without
 inference. Ready, rejected, failed and already-processing rows are skipped.
@@ -72,7 +72,7 @@ eligible source, run:
 
 ```sh
 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env \
-  python -m app.services.ingestion --source-id SOURCE_ID \
+  python -m app.cli.ingest --source-id SOURCE_ID \
   --process-article-id ARTICLE_ID --config /path/to/reviewed-sources.json
 ```
 

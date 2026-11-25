@@ -433,7 +433,7 @@ Run from the repository root with migrations applied and sources seeded. Find an
 active source ID using `GET /api/v1/sources`, then run:
 
 ```sh
-uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --verify-repeat
+uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --verify-repeat
 uv run --locked --env-file .env pytest -m integration tests/integration/test_ingestion.py -q
 ```
 
@@ -462,7 +462,7 @@ awaits Thanh Niên reuse clearance; live article extraction and AI processing re
 To label existing pending rows without collecting another feed, run:
 
 ```sh
-uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --prepare-only
+uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --prepare-only
 uv run --locked pytest tests/test_extractor.py tests/test_collector.py -q
 ```
 

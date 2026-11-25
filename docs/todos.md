@@ -170,7 +170,7 @@ uv run --locked --env-file .env pytest -m integration tests/integration/test_mig
 
 ### Day 3: collect and deduplicate
 
-**Files:** `config/sources.json`, `backend/app/services/{rss_collector,url_normalization,ingestion}.py`; `tests/test_collector.py`, `tests/test_url_normalization.py`, `tests/fixtures/rss/`.
+**Files:** `config/sources.json`, `backend/app/services/{rss_collector,url_normalization,feed_ingestion,text_preparation,source_guard}.py`, `backend/app/cli/ingest.py`; `tests/test_collector.py`, `tests/test_url_normalization.py`, `tests/fixtures/rss/`.
 
 - [ ] **D3.1** Verify three publisher-offered feed URLs. Record publisher name, host allowlist, checked date, feed availability and access/reuse evidence; activate only reviewed sources.
 - [x] **D3.2** Store source settings in `config/sources.json` and upsert them through `seed_sources.py`.
@@ -188,7 +188,7 @@ uv run --locked --env-file .env pytest -m integration tests/integration/test_mig
   - Verified 2026-10-14: five isolated-schema PostgreSQL ingestion tests passed, including two concurrent sessions, duplicate preservation, batch limit and rollback. Full unit/hosted PostgreSQL regression suite: **127 passed**. Focused Ruff checks/formatting passed with the filesystem EXE002 exception.
   - Live VnExpress: 51 usable entries; inserted IDs 1–20 in source 1; replay of the same 20 attempted entries inserted 0 and counted 20 duplicates.
   - Temporary loopback Uvicorn: source/list/detail endpoints returned HTTP 200; source total 20; article 1 pending with no summary. No article-page extraction or AI call.
-  - CLI: `uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --verify-repeat`. Fresh runs may add remaining or newly published articles; repeat verification replays only the attempted slice.
+  - CLI: `uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --verify-repeat`. Fresh runs may add remaining or newly published articles; repeat verification replays only the attempted slice.
 
 ```sh
 uv add 'httpx>=0.28,<1' 'feedparser>=6,<7'
@@ -263,7 +263,7 @@ uv run --locked --env-file .env pytest -m live tests/live/test_gemini.py -q
 
 ### Day 6: review, bounded retry and persistence
 
-**Files:** `backend/app/agents/{prompts,graph,nodes,schemas,state}.py`, `services/{gemini_service,summary_service,summary_persistence,ingestion}.py`, `seed_sources.py`; `tests/test_graph.py`, schema/provider/source/model unit tests, `tests/live/test_gemini.py`, `tests/integration/test_summary_persistence.py`.
+**Files:** `backend/app/agents/{prompts,graph,nodes,schemas,state}.py`, `services/{gemini_service,summary_service,summary_persistence,article_processing,pipeline}.py`, `seed_sources.py`; `tests/test_graph.py`, schema/provider/source/model unit tests, `tests/live/test_gemini.py`, `tests/integration/test_summary_persistence.py`.
 
 - [x] **D6.1** Write source-only review prompts: source text is untrusted data, not instructions. Provide bounded cleaned source and the text retained for ViT5, with excerpt/truncation context.
 - [x] **D6.2** Add `ReviewResult` with strict boolean approval and bounded feedback; invalid responses raise a processing error.
@@ -489,7 +489,7 @@ All backend paths are relative to `backend/app/`; tests live at root.
 | `core/config.py` | Env loading, validated limits, role-specific configuration |
 | `db/`, `models/`, `backend/alembic/` | Sessions, model mappings, enums, constraints, migrations |
 | `services/rss_collector.py`, `url_normalization.py`, `article_extractor.py` | Deterministic collection and source-text preparation |
-| `services/ingestion.py`, `job_service.py` | Idempotent writes, claims, transitions and counters |
+| `services/{feed_ingestion,text_preparation,article_processing,source_guard,pipeline}.py`, `job_service.py` | Idempotent writes, claims, transitions and counters |
 | `services/summary_service.py` | Local tokenizer/model initialization and bounded inference |
 | `services/gemini_service.py` | Official SDK client, Interactions metadata/review, JSON validation and bounded transport retries |
 | `agents/` | State, structured schemas, prompts, draft/review nodes and routing |
@@ -711,7 +711,7 @@ A1–A7 and the implemented D3 portion of A4 are executable against the current 
 | A1 foundation | `uv run --locked pytest tests/test_health.py tests/test_config.py -q` | 23 pass today; health requires no external service |
 | A2 sessions/schema | `uv run --locked pytest tests/test_db_session.py -q`; `uv run --locked --env-file .env python -m app.db.probe`; `uv run --locked --env-file .env alembic upgrade head`; `uv run --locked --env-file .env alembic current` | Session unit checks passed; Alembic connectivity shown in developer output; corrected upgrade reported working. Developer reports D2.7 lifecycle checks completed; backend relocation verified offline and by revision discovery |
 | A3 DB/read slice | `uv run --locked --env-file .env pytest -m integration tests/integration/test_migrations.py tests/integration/test_persistence.py tests/integration/test_api.py -q` | Real isolated-schema upgrades/constraints; fixture returned by source/list/detail; rejected output hidden |
-| A4 feeds/dedup/text | `uv run --locked --env-file .env python -m app.seed_sources`; `uv run --locked pytest tests/test_extractor.py tests/test_collector.py tests/test_url_normalization.py -q`; `uv run --locked --env-file .env pytest -m integration tests/integration/test_ingestion.py -q`; `uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --verify-repeat`; resume text only with `--prepare-only`. | D3–D4 fixture/persistence checks pass, including provenance, resume and guarded writes outside publisher IO. Live permitted RSS fallback is verified. A4's three-source policy gate and live publisher HTML extraction clearance remain open. |
+| A4 feeds/dedup/text | `uv run --locked --env-file .env python -m app.seed_sources`; `uv run --locked pytest tests/test_extractor.py tests/test_collector.py tests/test_url_normalization.py -q`; `uv run --locked --env-file .env pytest -m integration tests/integration/test_ingestion.py -q`; `uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --verify-repeat`; resume text only with `--prepare-only`. | D3–D4 fixture/persistence checks pass, including provenance, resume and guarded writes outside publisher IO. Live permitted RSS fallback is verified. A4's three-source policy gate and live publisher HTML extraction clearance remain open. |
 | A5 real ViT5 | `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env pytest -m model tests/model/test_summary_smoke.py -q` | Day 5: 2 passed; actual local generation, bounded Vietnamese output, socket-blocked loading/inference; latency/memory/truncation recorded in day-5-model.md |
 | A6 Gemini/graph | `uv run --locked pytest tests/test_gemini_service.py tests/test_graph.py tests/test_ai_schemas.py -q`; `uv run --locked --env-file .env pytest -m live tests/live/test_gemini.py -q` | Fake routes produce exact 1/2 drafts; transport cap holds; real metadata/review parse and model ID recorded |
 | A7 worker/jobs | `uv run --locked pytest tests/test_worker.py tests/test_scheduler.py -q`; `uv run --locked --env-file .env pytest -m integration tests/integration/test_jobs.py tests/integration/test_summary_persistence.py -q` | One claim wins; crash recovery/counters/replay pass; API only enqueues |
