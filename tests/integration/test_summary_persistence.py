@@ -10,8 +10,8 @@ from app.db.session import get_db
 from app.main import app
 from app.models import Article, ContentOrigin, ProcessingStatus, Summary
 from app.seed_sources import SourceConfig, load_source_config
+from app.services.article_processing import process_article
 from app.services.gemini_service import GeminiServiceError
-from app.services.ingestion import process_article
 from app.services.summary_persistence import persist_summary
 from app.services.summary_service import SMOKE_TEXT, SMOKE_TITLE, SummaryResult
 from fastapi.testclient import TestClient

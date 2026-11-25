@@ -22,7 +22,8 @@ from app.models import (
 )
 from app.seed_sources import SourceConfig, load_source_config
 from app.services.article_extractor import ArticleExtractor
-from app.services.ingestion import ingest_entries, process_article
+from app.services.article_processing import process_article
+from app.services.feed_ingestion import ingest_entries
 from app.services.job_service import (
     JobSubmissionError,
     claim_job,
@@ -528,7 +529,7 @@ def test_shutdown_keeps_running_job_for_recovery(pipeline):
 def test_fatal_final_write_fails_job_and_startup_recovers_claim(pipeline, monkeypatch):
     worker, article_id, _, _ = pipeline
     monkeypatch.setattr(
-        "app.services.ingestion.persist_summary",
+        "app.services.article_processing.persist_summary",
         Mock(side_effect=SQLAlchemyError("private database details")),
     )
     job_id = enqueue(worker)
@@ -541,7 +542,7 @@ def test_fatal_final_write_fails_job_and_startup_recovers_claim(pipeline, monkey
         assert session.get(Article, article_id).processing_status == ProcessingStatus.PROCESSING
         assert session.scalar(select(func.count()).select_from(Summary)) == 0
         recover_abandoned_work(session)
-    monkeypatch.setattr("app.services.ingestion.persist_summary", persist_summary)
+    monkeypatch.setattr("app.services.article_processing.persist_summary", persist_summary)
     resumed = enqueue(worker)
     worker.run_once()
     assert read_job(worker, resumed).articles_summarized == 1

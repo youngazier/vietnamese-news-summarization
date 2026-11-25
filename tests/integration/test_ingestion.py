@@ -12,13 +12,9 @@ from app.main import app
 from app.models import Article, ContentOrigin, ProcessingStatus, Source
 from app.seed_sources import ArticleExtractionPolicy, SourceConfig, load_source_config
 from app.services.article_extractor import ArticleExtractor
-from app.services.ingestion import (
-    ingest_entries,
-    insert_article,
-    prepare_pending_articles,
-    recover_review_articles,
-)
+from app.services.feed_ingestion import ingest_entries, insert_article
 from app.services.rss_collector import FeedEntry, parse_feed
+from app.services.text_preparation import prepare_pending_articles, recover_review_articles
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, func, select, text
 from sqlalchemy.exc import IntegrityError

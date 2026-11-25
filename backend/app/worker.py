@@ -19,14 +19,8 @@ from app.db.session import get_engine, get_session_factory
 from app.models import Article, IngestionJob, JobTrigger, ProcessingStatus, Source
 from app.seed_sources import DEFAULT_SOURCE_CONFIG, SourceConfig, load_source_config
 from app.services.article_extractor import ArticleExtractor
-from app.services.ingestion import (
-    NewsProcessor,
-    ingest_entries,
-    prepare_pending_articles,
-    process_article,
-    recover_review_articles,
-    require_active_source,
-)
+from app.services.article_processing import NewsProcessor, process_article
+from app.services.feed_ingestion import ingest_entries
 from app.services.job_service import (
     JobClaim,
     JobSubmissionError,
@@ -36,6 +30,8 @@ from app.services.job_service import (
     recover_abandoned_work,
 )
 from app.services.rss_collector import FeedError, RSSCollector
+from app.services.source_guard import require_active_source
+from app.services.text_preparation import prepare_pending_articles, recover_review_articles
 
 logger = logging.getLogger(__name__)
 
