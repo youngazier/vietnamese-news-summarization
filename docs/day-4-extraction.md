@@ -10,10 +10,10 @@ Use the existing environment, migrations and seeded sources described in the
 
 ```sh
 # Collect a reviewed active feed, persist it, then prepare the oldest pending text.
-uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --verify-repeat
+uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --verify-repeat
 
 # Resume existing pending rows without collecting more articles.
-uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --prepare-only
+uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --prepare-only
 ```
 
 Insertion uses `JOB_MAX_ARTICLE_INSERTIONS`; text preparation separately uses

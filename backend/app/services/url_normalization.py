@@ -1,13 +1,16 @@
 from urllib.parse import unquote_plus, urlsplit, urlunsplit
 
-TRACKING_PARAMETERS = frozenset({
-    "fbclid",
-    "gclid",
-    "dclid",
-    "msclkid",
-    "mc_cid",
-    "mc_eid",
-})
+TRACKING_PARAMETERS = frozenset(
+    {
+        "fbclid",
+        "gclid",
+        "dclid",
+        "msclkid",
+        "mc_cid",
+        "mc_eid",
+    }
+)
+
 
 def normalize_url(url: str) -> str:
     """Normalize an absolute HTTP(S) URL without changing article identity."""
@@ -44,10 +47,12 @@ def normalize_url(url: str) -> str:
             continue
         retained_parameters.append(parameter)
 
-    return urlunsplit((
-        scheme,
-        authority,
-        parts.path,
-        "&".join(retained_parameters),
-        "",
-    ))
+    return urlunsplit(
+        (
+            scheme,
+            authority,
+            parts.path,
+            "&".join(retained_parameters),
+            "",
+        )
+    )

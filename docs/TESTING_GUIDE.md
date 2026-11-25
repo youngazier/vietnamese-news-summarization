@@ -29,7 +29,7 @@ This guide gives the detailed test-by-test explanation of that executable state:
 | Source seeding | [backend/app/seed_sources.py](../backend/app/seed_sources.py) | Validates JSON and upserts sources by RSS URL; two reviewed RSS-reader sources are active and Thanh Niên remains inactive. |
 | RSS collector | [backend/app/services/rss_collector.py](../backend/app/services/rss_collector.py) | Fetches reviewed active feeds with bounded retries, redirects and response size; parses cleaned entry metadata. |
 | URL normalization | [backend/app/services/url_normalization.py](../backend/app/services/url_normalization.py) | Removes fragments/default ports/tracking parameters while preserving article-identifying URL differences. |
-| Ingestion persistence | [backend/app/services/ingestion.py](../backend/app/services/ingestion.py) | Inserts pending articles with PostgreSQL conflict handling and provides a bounded manual collection command. |
+| Ingestion persistence | [feed_ingestion.py](../backend/app/services/feed_ingestion.py), [text_preparation.py](../backend/app/services/text_preparation.py), [article_processing.py](../backend/app/services/article_processing.py), [cli/ingest.py](../backend/app/cli/ingest.py) | Inserts pending articles with PostgreSQL conflict handling, prepares text, runs article AI processing, and provides a bounded manual collection command. |
 
 RSS collection and deduplicated persistence are implemented. Article extraction,
 AI processing, the worker, the React frontend, and application containers are

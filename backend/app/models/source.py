@@ -19,16 +19,10 @@ class Source(Base):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     rss_url: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=true()
-    )
-    last_fetched_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=true())
+    last_fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    articles: Mapped[list[Article]] = relationship(
-        back_populates="source", passive_deletes="all"
-    )
+    articles: Mapped[list[Article]] = relationship(back_populates="source", passive_deletes="all")
     ingestion_jobs: Mapped[list[IngestionJob]] = relationship(
         back_populates="source", passive_deletes="all"
     )

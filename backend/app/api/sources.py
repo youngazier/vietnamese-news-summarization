@@ -11,6 +11,7 @@ from app.models import Source
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
+
 @router.get("", response_model=list[SourceRead])
 def list_sources(
     db: Annotated[Session, Depends(get_db)],
