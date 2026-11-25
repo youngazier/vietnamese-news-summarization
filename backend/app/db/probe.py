@@ -59,8 +59,7 @@ def probe_database() -> int:
 
     except (SQLAlchemyError, ValueError):
         print(
-            "Database probe failed. Check the URL, password, "
-            "network access and TLS settings.",
+            "Database probe failed. Check the URL, password, network access and TLS settings.",
             file=sys.stderr,
         )
         return 1

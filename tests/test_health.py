@@ -19,7 +19,7 @@ def test_health_returns_ok_without_external_services(monkeypatch, tmp_path):
         monkeypatch.delenv(name, raising=False)
 
     def prohibit_network(*args, **kwargs):
-            raise AssertionError("Health must not access external services")
+        raise AssertionError("Health must not access external services")
 
     monkeypatch.setattr(socket.socket, "connect", prohibit_network)
     monkeypatch.setattr(socket.socket, "connect_ex", prohibit_network)

@@ -34,8 +34,7 @@ class IngestionJob(Base):
             name="nonnegative_counters",
         ),
         CheckConstraint(
-            "articles_processed = articles_summarized "
-            "+ articles_failed + articles_needs_review",
+            "articles_processed = articles_summarized + articles_failed + articles_needs_review",
             name="processed_counter_total",
         ),
         Index("ix_ingestion_jobs_status_created_at_id", "status", "created_at", "id"),
@@ -56,21 +55,15 @@ class IngestionJob(Base):
     trigger: Mapped[JobTrigger] = mapped_column(
         string_enum(JobTrigger, name="trigger"), nullable=False
     )
-    attempts: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("0")
-    )
-    articles_created: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("0")
-    )
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    articles_created: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     articles_summarized: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )
     articles_processed: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )
-    articles_failed: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("0")
-    )
+    articles_failed: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     articles_needs_review: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=text("0")
     )
@@ -78,11 +71,7 @@ class IngestionJob(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
-    started_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
-    finished_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     source: Mapped[Source | None] = relationship(back_populates="ingestion_jobs")
