@@ -4,26 +4,26 @@ Follow [architecture.md](architecture.md) for product scope. Work through each d
 
 **Time budget:** 5–6 focused hours per day. Days 13–14 provide debugging and setup buffer. When asking for implementation, name the phase or day; implement only that scope, explain the decisions, and run its checks.
 
-## Repository progress — 2026-10-15 (initial audit: 2026-10-12)
+## Repository progress — 2026-11-08 (initial audit: 2026-10-12)
 
-Preserve the root uv project and `backend/app` package (`module-name="app"`, `module-root="backend"`), root tests, Python 3.12 selection and existing ORM models. Days 2, 4, 5, 6 and 7 are complete. Day 6 includes real local ViT5/Gemini approval, atomic persistence and HTTP visibility for article 41, alongside hidden rejection for article 5. Day 3 implementation is complete through D3.9: reviewed source configuration, bounded RSS collection, parsing, conservative URL normalization, conflict-safe persistence, live VnExpress collection and REST verification are implemented. The three-source D3.1 policy gate remains open because Thanh Niên reuse is unresolved.
+Preserve the root uv project and `backend/app` package (`module-name="app"`, `module-root="backend"`), root tests, Python 3.12 selection and existing ORM models. Days 1, 2, 4, 5, 6, 7 and 8 are complete (along with core Day 9 reader features and Day 11 container definitions). Day 6 includes real local ViT5/Gemini approval, atomic persistence and HTTP visibility for article 41, alongside hidden rejection for article 5. Day 3 implementation is complete through D3.9: reviewed source configuration, bounded RSS collection, parsing, conservative URL normalization, conflict-safe persistence, live VnExpress collection and REST verification are implemented. Currently `config/sources.json` enables full-text extraction and AI processing for VnExpress and Tuổi Trẻ; the three-source D3.1 policy gate remains open because Thanh Niên reuse is unresolved.
 
 | Area | Current evidence | Remaining work |
 | --- | --- | --- |
 | API foundation | `/health`, the three D2 read endpoints and POST/GET ingestion-job routes are registered; scope, backlog, visibility and redacted outage behavior are covered | Retain regression coverage |
 | Database declarations | Four models, relationships, enum checks, identities/defaults/indexes exist; mapper configuration and PostgreSQL DDL compile | Retain constraints as later write paths are added |
 | Database sessions | Lazy cached engine/session factory and per-request dependency implemented and used by read routes; URL/driver/TLS validation, cache reuse and cleanup tested | Retain regression coverage |
-| Migrations | Revisions `0001` and `0002` exist; `0002` renames the summary model column with data-preservation coverage | Apply/verify head on each setup; retain lifecycle tests |
-| PostgreSQL integration | **105 distinct PostgreSQL cases** verified across the full regression and final Day 7 job run on 2026-10-15, including migration lifecycle, concurrent jobs, atomic counters, recovery, replay and REST visibility | Retain as regression coverage |
-| RSS collection/text preparation | Committed configuration enables full-text extraction and AI processing for VnExpress (`article.fck_detail`) and Tuổi Trẻ (`div.detail-content`), and keeps Thanh Niên inactive; worker automatically recovers older `extraction_disabled` backlog rows | Resolve Thanh Niên reuse before activating third source |
+| Migrations | Revisions `0001`–`0004` exist (`0002` renames summary model column, `0003` adds `articles.image_url`, `0004` adds `human_review_*` audit columns) | Apply/verify head on each setup; retain lifecycle tests |
+| PostgreSQL integration | **105 distinct PostgreSQL cases** verified across the full regression and final Day 7 job run on 2026-10-15, plus 63 cases verified with article image migrations/persistence | Retain as regression coverage |
+| RSS collection/text preparation | Committed configuration enables full-text extraction and AI processing for VnExpress (`article.fck_detail`) and Tuổi Trẻ (`div.detail-content`), and keeps Thanh Niên inactive; worker automatically recovers older `extraction_disabled` backlog rows; RSS/HTML article image extraction (`article_images.py`) and backfill (`backfill_article_images.py`) implemented | Resolve Thanh Niên reuse before activating third source |
 | Dependencies | Day 5 locks CPU Torch 2.14.1+cpu; `torch.version.cuda is None`; `uv pip check` reports 90 compatible packages | Retain tested CPU resolution |
 | AI/model | Local CPU ViT5, structured metadata/review, bounded StateGraph and atomic summary auto-approval persistence (`approved=True`, `ready`) verified | Retain graph/persistence regression coverage |
 | Tooling | uv 0.12.15; Docker Compose v2; Node/npm available for frontend | Retain toolchain |
 | Jobs/worker | Durable POST/GET, atomic claim/counters, single-worker recovery, backlog extraction recovery, and UTC interval scheduler implemented; live job 1 completed while API was stopped | Retain single-worker deployment and source permission gates |
-| Frontend | React 19, Vite, Tailwind CSS v4, shadcn UI, news reader components implemented in `frontend/`; manual review UI removed and feed filtered to show only summarized articles | Retain frontend integration coverage |
-| Containers & Packaging | `backend/Dockerfile`, `frontend/Dockerfile` with Nginx reverse proxy, `.dockerignore`, and `compose.yaml` (orchestrating `frontend`, `api`, `worker`) created and validated | Final end-to-end containerized smoke runs |
+| Frontend | React 19, Vite 7, TypeScript 5.9, Tailwind CSS v4, shadcn/ui news reader ("Góc Việt") implemented in `frontend/`; typed API client, feed/featured/digest layout, category filter, diacritic-insensitive search, detail modal (`ArticleReader`), and loading/empty/error/retry states verified | Complete remaining Day 9–10 journey checks |
+| Containers & Packaging | `backend/Dockerfile`, `frontend/Dockerfile` with Nginx reverse proxy, `.dockerignore`, and `compose.yaml` (orchestrating `frontend`, `api`, `worker`) created and validated | Final end-to-end containerized smoke runs (D11.11–D11.12, Day 12) |
 
-Day 3 evidence: the complete suite passed **127 tests** on 2026-10-14, including **50 integration cases**. The live VnExpress run parsed 51 usable entries, inserted 20 within the cap, replayed the attempted slice with zero new rows and returned the stored article through REST. Day 4 adds guarded text preparation and fictional public-HTML fixtures; live article extraction and publisher AI remain disabled. See [Day 4 verification](day-4-extraction.md). Day 5 verification: **187 unit tests passed**, **2 actual model tests passed**, **1 actual Gemini test passed**; the 60 PostgreSQL cases were not rerun because database behavior did not change. See [Day 5 verification](day-5-model.md). `/health` remains liveness only. Day 6 review and persistence are implemented; see [Day 6 verification](day-6-review.md). Day 7 jobs/worker/scheduler are implemented; see [Day 7 verification](day-7-worker.md). Frontend remains planned.
+Day 3 evidence: the complete suite passed **127 tests** on 2026-10-14, including **50 integration cases**. The live VnExpress run parsed 51 usable entries, inserted 20 within the cap, replayed the attempted slice with zero new rows and returned the stored article through REST. Day 4 adds guarded text preparation and fictional public-HTML fixtures; see [Day 4 verification](day-4-extraction.md). Day 5 verification: **187 unit tests passed**, **2 actual model tests passed**, **1 actual Gemini test passed**; see [Day 5 verification](day-5-model.md). `/health` remains liveness only. Day 6 review and persistence are implemented; see [Day 6 verification](day-6-review.md). Day 7 jobs/worker/scheduler are implemented; see [Day 7 verification](day-7-worker.md). Day 8 frontend setup, typed API client, feed rendering, article image support ([article-images.md](article-images.md)), and core Day 9 reader modal/search/filter UI are implemented in `frontend/`.
 
 ## Planning deliverables
 
@@ -55,7 +55,7 @@ M2 and M3 can be developed independently after M1 using labeled fixtures. Read c
 
 **First smallest end-to-end slice:** one fixture source/article in migrated PostgreSQL → `GET /api/v1/sources`, article list/detail → validated JSON. This exercises persistence, sessions and HTTP without waiting for RSS or AI.
 
-**Next task:** begin Day 8 frontend setup and reader UI. Day 7 durable jobs, recovery and scheduling are verified; live job 1 completed with the API stopped. Day 6 approved-live-result acceptance is verified with article 41. D3.1 and ongoing publisher extraction/AI permissions remain separate policy gates.
+**Next task:** complete remaining Day 9–10 reader journey checks and Day 11–12 containerized runtime smoke tests. Day 8 frontend setup, typed API client, feed UI ("Góc Việt"), article image support, and Day 11 Dockerfiles/Compose configuration are implemented. Day 7 durable jobs, recovery and scheduling are verified; live job 1 completed with the API stopped. Day 6 approved-live-result acceptance is verified with article 41. D3.1 (Thanh Niên reuse) remains a separate policy gate.
 
 ## Scope and boundaries
 
@@ -326,16 +326,16 @@ curl --fail http://127.0.0.1:8000/api/v1/ingestion-jobs/42
 
 ### Day 8: feed and API client
 
-**Files:** `frontend/src/services/api.ts`, `pages/Feed.tsx`, `components/ArticleCard.tsx`, `App.tsx`, `vite.config.ts`.
+**Files:** `frontend/src/services/api.ts`, `frontend/src/data/articles.ts`, `frontend/src/components/news/{ArticleCard,ArticleReader,NewsHeader,NewsSkeleton}.tsx`, `frontend/src/App.tsx`, `frontend/vite.config.ts`.
 
-- [ ] **D8.1** Install a supported Node/npm version compatible with the selected Vite template; record it in `.node-version`.
-- [ ] **D8.2** Scaffold React/Vite/TypeScript; install packages and preserve `package-lock.json`.
-- [ ] **D8.3** Configure `/api` proxy to `http://127.0.0.1:8000` and bind Vite to loopback.
-- [ ] **D8.4** Define TypeScript types matching the REST schemas; write a small fetch wrapper with typed results and meaningful errors.
-- [ ] **D8.5** Fetch active sources and article pages using relative URLs. Never place DB/provider credentials in frontend env variables.
-- [ ] **D8.6** Render title, source, time, category/preview when approved, status and original link.
-- [ ] **D8.7** Add loading, empty, error and retry states. Verify each using an empty dataset and interrupted API.
-- [ ] **D8.8** Add a `typecheck` script and run it with the frontend build.
+- [x] **D8.1** Install a supported Node/npm version compatible with the selected Vite template; Node 20 LTS pinned in `frontend/Dockerfile`.
+- [x] **D8.2** Scaffold React/Vite/TypeScript; install packages (React 19, Vite 7, Tailwind CSS v4, shadcn/ui, Lucide icons) and preserve `package-lock.json`.
+- [x] **D8.3** Configure `/api` proxy to `http://127.0.0.1:8000` and bind Vite to loopback (`127.0.0.1`) in `frontend/vite.config.ts`.
+- [x] **D8.4** Define TypeScript types matching the REST schemas (`SourceRead`, `ArticleRead`, `ArticleDetail`, `ArticlePage`, `ArticleCategory`, `ProcessingStatus`); write a small fetch wrapper (`getArticles`, `getArticle` in `frontend/src/services/api.ts`) with `AbortSignal`, typed results and meaningful Vietnamese errors.
+- [x] **D8.5** Fetch article pages and article details using relative `/api/v1` URLs. Never place DB/provider credentials in frontend env variables.
+- [x] **D8.6** Render title, source, time (`Asia/Ho_Chi_Minh`), category/preview when approved, optional `image_url` with editorial placeholder fallback, status and validated `http/https` original link (`ArticleCard.tsx`, `App.tsx`). Feed filters to summarized articles (`article.summary !== null`) with featured lead story, top digest, and article grid.
+- [x] **D8.7** Add loading (`NewsSkeleton`), empty (`Chưa có bài viết` / `Chưa tìm thấy câu chuyện phù hợp`), error (`Không thể tải tin tức`) and retry (`Thử lại` / `Tải lại`) states in `App.tsx` and `ArticleReader.tsx`.
+- [x] **D8.8** Run TypeScript check (`tsc -b`) with the frontend build (`npm --prefix frontend run build`) and ESLint (`npm --prefix frontend run lint`).
 
 ```sh
 npm create vite@latest frontend -- --template react-ts
@@ -345,11 +345,11 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 
 # From the root in another terminal:
 curl --fail 'http://127.0.0.1:5173/api/v1/articles?page=1&page_size=20'
-npm --prefix frontend run typecheck
+npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
 
-**Day complete:** browser displays real backend data through the proxy; loading/empty/error states work.
+**Day complete (verified):** browser displays real backend data through the `/api` proxy in the "Góc Việt" reader UI; loading/empty/error/retry states, article images, category filtering, diacritic-insensitive search, and the `ArticleReader` dialog work; `npm run lint` and `npm run build` pass.
 
 ### Day 9: search, filters and detail
 
