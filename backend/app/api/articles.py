@@ -10,6 +10,34 @@ from sqlalchemy.orm import Session, joinedload
 router = APIRouter(prefix="/articles", tags=["articles"])
 
 
+def _is_visible(article: Article) -> bool:
+    summary = article.summary
+    return (
+        article.processing_status == ProcessingStatus.READY
+        and summary is not None
+        and summary.approved
+    )
+
+
+def _to_card(article: Article) -> ArticleCard:
+    summary = article.summary
+    visible = _is_visible(article)
+    return ArticleCard(
+        id=article.id,
+        title=article.title,
+        original_url=article.original_url,
+        image_url=article.image_url,
+        source=SourceRead.model_validate(article.source),
+        published_at=article.published_at,
+        created_at=article.created_at,
+        content_origin=article.content_origin,
+        processing_status=article.processing_status,
+        category=summary.category if visible else None,
+        summary_preview=summary.summary_text[:240] if visible else None,
+        input_truncated=summary.input_truncated if visible else None,
+    )
+
+
 @router.get("/{article_id}", response_model=ArticleDetail)
 def get_article(
     article_id: Annotated[int, Path(gt=0)],
@@ -35,27 +63,11 @@ def get_article(
             },
         )
 
-    summary = article.summary
-    visible = (
-        article.processing_status == ProcessingStatus.READY
-        and summary is not None
-        and summary.approved
-    )
-
+    visible = _is_visible(article)
+    card = _to_card(article)
     return ArticleDetail(
-        id=article.id,
-        title=article.title,
-        original_url=article.original_url,
-        image_url=article.image_url,
-        source=SourceRead.model_validate(article.source),
-        published_at=article.published_at,
-        created_at=article.created_at,
-        content_origin=article.content_origin,
-        processing_status=article.processing_status,
-        category=summary.category if visible else None,
-        summary_preview=summary.summary_text[:240] if visible else None,
-        input_truncated=summary.input_truncated if visible else None,
-        summary=SummaryRead.model_validate(summary) if visible else None,
+        **card.model_dump(),
+        summary=SummaryRead.model_validate(article.summary) if visible else None,
         ai_generated=visible,
     )
 
@@ -91,28 +103,5 @@ def list_articles(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    items = []
-    for article in db.scalars(statement).all():
-        summary = article.summary
-        visible = (
-            article.processing_status == ProcessingStatus.READY
-            and summary is not None
-            and summary.approved
-        )
-        items.append(
-            ArticleCard(
-                id=article.id,
-                title=article.title,
-                original_url=article.original_url,
-                image_url=article.image_url,
-                source=SourceRead.model_validate(article.source),
-                published_at=article.published_at,
-                created_at=article.created_at,
-                content_origin=article.content_origin,
-                processing_status=article.processing_status,
-                category=summary.category if visible else None,
-                summary_preview=summary.summary_text[:240] if visible else None,
-                input_truncated=summary.input_truncated if visible else None,
-            )
-        )
+    items = [_to_card(article) for article in db.scalars(statement).all()]
     return ArticlePage(items=items, total=total, page=page, page_size=page_size)
