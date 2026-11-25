@@ -1,14 +1,14 @@
 """Prepare stored article text before AI processing."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from app.models import Article, ContentOrigin, ProcessingStatus
 from app.seed_sources import SourceConfig
-from app.services.article_extractor import ArticleExtractor
+from app.services.article_extractor import ArticleExtractor, ExtractionResult
 from app.services.job_service import record_article_result
 from app.services.source_guard import require_active_source
-from sqlalchemy import func, select, update
+from sqlalchemy import Executable, func, select, update
 from sqlalchemy.orm import Session
 
 
@@ -18,6 +18,40 @@ class TextPreparationResult:
     pending: int
     needs_review: int
     skipped: int
+
+
+def _extract_and_update(
+    factory: Callable[[], Session],
+    source_id: int,
+    config: SourceConfig,
+    extractor: ArticleExtractor,
+    rows: Iterable[tuple[int, str, str | None]],
+    build_update: Callable[[int, str, str | None, ExtractionResult], tuple[Executable, bool]],
+    *,
+    job_id: int | None = None,
+    should_stop: Callable[[], bool] = lambda: False,
+) -> TextPreparationResult:
+    prepared_ids = []
+    pending = needs_review = skipped = 0
+    for article_id, url, description in rows:
+        if should_stop():
+            break
+        result = extractor.extract(
+            url, description, config, source_id=source_id, article_id=article_id, job_id=job_id
+        )
+        statement, is_pending = build_update(article_id, url, description, result)
+        with factory() as session, session.begin():
+            require_active_source(session, source_id, config)
+            saved_id = session.scalar(statement)
+            if saved_id is not None and not is_pending and job_id is not None:
+                record_article_result(session, job_id, ProcessingStatus.NEEDS_REVIEW)
+        if saved_id is None:
+            skipped += 1
+        else:
+            prepared_ids.append(saved_id)
+            pending += int(is_pending)
+            needs_review += int(not is_pending)
+    return TextPreparationResult(tuple(prepared_ids), pending, needs_review, skipped)
 
 
 def prepare_pending_articles(
@@ -55,45 +89,41 @@ def prepare_pending_articles(
             query = query.where(Article.id.in_(article_ids))
         rows = session.execute(query.limit(max_articles)).all()
 
-    prepared_ids = []
-    pending = needs_review = skipped = 0
-    for article_id, url, description in rows:
-        if should_stop():
-            break
-        result = extractor.extract(
-            url, description, config, source_id=source_id, article_id=article_id, job_id=job_id
-        )
+    def build_update(
+        article_id: int, url: str, description: str | None, result: ExtractionResult
+    ) -> tuple[Executable, bool]:
         status = ProcessingStatus.PENDING if result.usable else ProcessingStatus.NEEDS_REVIEW
-        with factory() as session, session.begin():
-            require_active_source(session, source_id, config)
-            saved_id = session.scalar(
-                update(Article)
-                .where(
-                    Article.id == article_id,
-                    Article.processing_status == ProcessingStatus.PENDING,
-                    Article.content.is_(None),
-                    Article.content_origin.is_(None),
-                    Article.original_url == url,
-                    Article.rss_description.is_not_distinct_from(description),
-                )
-                .values(
-                    image_url=func.coalesce(Article.image_url, result.image_url),
-                    content=result.text,
-                    content_origin=result.content_origin,
-                    processing_status=status,
-                    processing_error=result.failure_reason,
-                )
-                .returning(Article.id)
+        statement = (
+            update(Article)
+            .where(
+                Article.id == article_id,
+                Article.processing_status == ProcessingStatus.PENDING,
+                Article.content.is_(None),
+                Article.content_origin.is_(None),
+                Article.original_url == url,
+                Article.rss_description.is_not_distinct_from(description),
             )
-            if saved_id is not None and not result.usable and job_id is not None:
-                record_article_result(session, job_id, ProcessingStatus.NEEDS_REVIEW)
-        if saved_id is None:
-            skipped += 1
-        else:
-            prepared_ids.append(saved_id)
-            pending += int(result.usable)
-            needs_review += int(not result.usable)
-    return TextPreparationResult(tuple(prepared_ids), pending, needs_review, skipped)
+            .values(
+                image_url=func.coalesce(Article.image_url, result.image_url),
+                content=result.text,
+                content_origin=result.content_origin,
+                processing_status=status,
+                processing_error=result.failure_reason,
+            )
+            .returning(Article.id)
+        )
+        return statement, result.usable
+
+    return _extract_and_update(
+        factory,
+        source_id,
+        config,
+        extractor,
+        rows,
+        build_update,
+        job_id=job_id,
+        should_stop=should_stop,
+    )
 
 
 def recover_review_articles(
@@ -129,44 +159,41 @@ def recover_review_articles(
             .limit(max_articles)
         ).all()
 
-    prepared_ids = []
-    pending = needs_review = skipped = 0
-    for article_id, url, description in rows:
-        if should_stop():
-            break
-        result = extractor.extract(
-            url, description, config, source_id=source_id, article_id=article_id
-        )
+    def build_update(
+        article_id: int, url: str, description: str | None, result: ExtractionResult
+    ) -> tuple[Executable, bool]:
         recovered = result.usable and result.content_origin == ContentOrigin.EXTRACTED
-        with factory() as session, session.begin():
-            require_active_source(session, source_id, config)
-            saved_id = session.scalar(
-                update(Article)
-                .where(
-                    Article.id == article_id,
-                    Article.processing_status == ProcessingStatus.NEEDS_REVIEW,
-                    ~Article.summary.has(),
-                    Article.original_url == url,
-                    Article.rss_description.is_not_distinct_from(description),
-                    Article.processing_error.like("extraction_disabled;%"),
-                )
-                .values(
-                    image_url=func.coalesce(Article.image_url, result.image_url),
-                    content=result.text if recovered else Article.content,
-                    content_origin=result.content_origin if recovered else Article.content_origin,
-                    processing_status=(
-                        ProcessingStatus.PENDING if recovered else ProcessingStatus.NEEDS_REVIEW
-                    ),
-                    processing_error=(
-                        None if recovered else result.failure_reason or "full_text_unavailable"
-                    ),
-                )
-                .returning(Article.id)
+        statement = (
+            update(Article)
+            .where(
+                Article.id == article_id,
+                Article.processing_status == ProcessingStatus.NEEDS_REVIEW,
+                ~Article.summary.has(),
+                Article.original_url == url,
+                Article.rss_description.is_not_distinct_from(description),
+                Article.processing_error.like("extraction_disabled;%"),
             )
-        if saved_id is None:
-            skipped += 1
-        else:
-            prepared_ids.append(saved_id)
-            pending += int(recovered)
-            needs_review += int(not recovered)
-    return TextPreparationResult(tuple(prepared_ids), pending, needs_review, skipped)
+            .values(
+                image_url=func.coalesce(Article.image_url, result.image_url),
+                content=result.text if recovered else Article.content,
+                content_origin=result.content_origin if recovered else Article.content_origin,
+                processing_status=(
+                    ProcessingStatus.PENDING if recovered else ProcessingStatus.NEEDS_REVIEW
+                ),
+                processing_error=(
+                    None if recovered else result.failure_reason or "full_text_unavailable"
+                ),
+            )
+            .returning(Article.id)
+        )
+        return statement, recovered
+
+    return _extract_and_update(
+        factory,
+        source_id,
+        config,
+        extractor,
+        rows,
+        build_update,
+        should_stop=should_stop,
+    )
