@@ -187,7 +187,7 @@ class ArticleExtractor:
         Read only metadata from a stored article URL. Keep the same request limits,
         reviewed host boundary and robots checks as source-text extraction.
         """
-        if not source.is_active or source.review_status != "rss_reader_supported":
+        if not source.is_usable:
             return None
         try:
             robots = self._robots_for(source)
@@ -221,7 +221,7 @@ class ArticleExtractor:
         text = ""
         origin = None
         image = None
-        if not source.is_active or source.review_status != "rss_reader_supported":
+        if not source.is_usable:
             # No fallback reuse for an inactive/unreviewed source.
             result = ExtractionResult(None, None, False, "source_not_permitted")
         else:

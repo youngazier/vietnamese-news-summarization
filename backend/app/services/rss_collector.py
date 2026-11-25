@@ -128,7 +128,7 @@ class RSSCollector:
 
     def fetch(self, source: SourceConfig) -> bytes:
         """Fetch an active feed; validate redirects before following them."""
-        if not source.is_active or source.review_status != "rss_reader_supported":
+        if not source.is_usable:
             raise FeedFetchError("Source is inactive or RSS use is unresolved")
 
         current_url = source.rss_url

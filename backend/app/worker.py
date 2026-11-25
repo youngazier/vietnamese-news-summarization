@@ -191,11 +191,7 @@ class Worker:
         failures = 0
         for source_id, url in sources:
             config = self.configs.get(url)
-            if (
-                config is None
-                or not config.is_active
-                or config.review_status != "rss_reader_supported"
-            ):
+            if config is None or not config.is_usable:
                 failures += 1
                 continue
             eligible.append((source_id, config))

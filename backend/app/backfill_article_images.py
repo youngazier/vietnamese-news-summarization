@@ -55,8 +55,7 @@ def source_policy(source: Source, policies: list[SourceConfig]) -> SourceConfig 
         return None
     for policy in policies:
         if (
-            policy.is_active
-            and policy.review_status == "rss_reader_supported"
+            policy.is_usable
             and urlsplit(source.rss_url).hostname == urlsplit(policy.rss_url).hostname
         ):
             return policy.model_copy(update={"rss_url": source.rss_url})

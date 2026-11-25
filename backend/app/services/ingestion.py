@@ -144,8 +144,7 @@ def require_active_source(session: Session, source_id: int, config: SourceConfig
         source is None
         or not source.is_active
         or source.rss_url != config.rss_url
-        or not config.is_active
-        or config.review_status != "rss_reader_supported"
+        or not config.is_usable
     ):
         raise ValueError("Source configuration changed during collection")
 
