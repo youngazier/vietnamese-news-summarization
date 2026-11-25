@@ -1,0 +1,16 @@
+[mcp_servers.shadcn]
+command = "npx"
+args = ["-y", "shadcn@latest", "mcp"]
+cwd = "/mnt/hdd-1tb/Personal-Projects/vietnamese-news-summarization/frontend"
+startup_timeout_sec = 60
+
+[mcp_servers.playwright]
+command = "npx"
+args = [
+  "-y",
+  "@playwright/mcp@latest",
+  "--executable-path",
+  "/usr/bin/brave-browser",
+  "--headless",
+]
+startup_timeout_sec = 60

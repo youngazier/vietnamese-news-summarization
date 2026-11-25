@@ -22,7 +22,8 @@ from app.models import (
 )
 from app.seed_sources import SourceConfig, load_source_config
 from app.services.article_extractor import ArticleExtractor
-from app.services.ingestion import ingest_entries, process_article
+from app.services.article_processing import process_article
+from app.services.feed_ingestion import ingest_entries
 from app.services.job_service import (
     JobSubmissionError,
     claim_job,
@@ -52,6 +53,8 @@ def pipeline(migrated_database, db_session, api_article):
             "official_rss_url": "https://example.com/rss",
             "robots_url": "https://example.com/robots.txt",
             "allowed_hosts": ["example.com"],
+            "article_extraction_allowed": False,
+            "article_extraction": None,
             "ai_processing_allowed": True,
             "ai_processing_review_note": "Authored fixture text.",
         }
@@ -406,8 +409,8 @@ def test_result_counter_and_summary_roll_back_together_and_replay_is_safe(pipeli
         assert not persist_summary(session, result, job_id=job_id, **worker.model_names)
     job = read_job(worker, job_id)
     assert job.articles_processed == 1
-    assert job.articles_summarized == int(approved)
-    assert job.articles_needs_review == int(not approved)
+    assert job.articles_summarized == 1
+    assert job.articles_needs_review == 0
 
 
 def test_insertion_counter_rolls_back_with_article(pipeline):
@@ -526,7 +529,7 @@ def test_shutdown_keeps_running_job_for_recovery(pipeline):
 def test_fatal_final_write_fails_job_and_startup_recovers_claim(pipeline, monkeypatch):
     worker, article_id, _, _ = pipeline
     monkeypatch.setattr(
-        "app.services.ingestion.persist_summary",
+        "app.services.article_processing.persist_summary",
         Mock(side_effect=SQLAlchemyError("private database details")),
     )
     job_id = enqueue(worker)
@@ -539,7 +542,7 @@ def test_fatal_final_write_fails_job_and_startup_recovers_claim(pipeline, monkey
         assert session.get(Article, article_id).processing_status == ProcessingStatus.PROCESSING
         assert session.scalar(select(func.count()).select_from(Summary)) == 0
         recover_abandoned_work(session)
-    monkeypatch.setattr("app.services.ingestion.persist_summary", persist_summary)
+    monkeypatch.setattr("app.services.article_processing.persist_summary", persist_summary)
     resumed = enqueue(worker)
     worker.run_once()
     assert read_job(worker, resumed).articles_summarized == 1

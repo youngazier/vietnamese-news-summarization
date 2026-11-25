@@ -135,6 +135,7 @@ def test_cpu_local_load_and_reuse_with_exactly_one_eos(artifacts, fake_runtime):
     for call in model.generate.call_args_list:
         assert call.kwargs["input_ids"].data == [[3, 4, 5, 1]]
         assert call.kwargs["max_new_tokens"] == 256
+        assert call.kwargs["min_new_tokens"] == 0
         assert call.kwargs["do_sample"] is False
         assert call.kwargs["no_repeat_ngram_size"] == 3
     assert (
@@ -155,6 +156,8 @@ def test_long_input_truncates_before_eos_and_records_retained_text(artifacts, fa
     assert len(ids) == 1024 and ids[-1] == 1
     tokenizer.decode.assert_any_call(list(range(3, 1026)), skip_special_tokens=True)
     assert result.inference_text == "Nguồn được giữ lại"
+    assert model.generate.call_args.kwargs["min_new_tokens"] == 48
+    assert model.generate.call_args.kwargs["length_penalty"] == 1.2
 
 
 @pytest.mark.parametrize(

@@ -4,6 +4,7 @@ import argparse
 import logging
 import signal
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
@@ -19,13 +20,8 @@ from app.db.session import get_engine, get_session_factory
 from app.models import Article, IngestionJob, JobTrigger, ProcessingStatus, Source
 from app.seed_sources import DEFAULT_SOURCE_CONFIG, SourceConfig, load_source_config
 from app.services.article_extractor import ArticleExtractor
-from app.services.ingestion import (
-    NewsProcessor,
-    ingest_entries,
-    prepare_pending_articles,
-    process_article,
-    require_active_source,
-)
+from app.services.article_processing import NewsProcessor, process_article
+from app.services.feed_ingestion import ingest_entries
 from app.services.job_service import (
     JobClaim,
     JobSubmissionError,
@@ -34,7 +30,10 @@ from app.services.job_service import (
     finish_job,
     recover_abandoned_work,
 )
+from app.services.pipeline import open_pipeline
 from app.services.rss_collector import FeedError, RSSCollector
+from app.services.source_guard import require_active_source
+from app.services.text_preparation import prepare_pending_articles, recover_review_articles
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +71,12 @@ def build_scheduler(
     return scheduler
 
 
+@dataclass(frozen=True)
+class JobBudget:
+    insertions: int
+    results: int
+
+
 class Worker:
     def __init__(
         self,
@@ -98,18 +103,27 @@ class Worker:
         }
         self.stop = stop
 
-    def remaining(self, job_id: int) -> tuple[int, int]:
+    def remaining(self, job_id: int) -> JobBudget:
         with self.factory() as session:
             job = session.get(IngestionJob, job_id)
-            return (
-                max(0, self.settings.JOB_MAX_ARTICLE_INSERTIONS - job.articles_created),
-                max(0, self.settings.JOB_MAX_ARTICLE_RESULTS - job.articles_processed),
+            return JobBudget(
+                insertions=max(0, self.settings.JOB_MAX_ARTICLE_INSERTIONS - job.articles_created),
+                results=max(0, self.settings.JOB_MAX_ARTICLE_RESULTS - job.articles_processed),
             )
 
-    def process_pending(self, job_id: int, source_id: int, config: SourceConfig) -> None:
-        _, remaining = self.remaining(job_id)
-        if not remaining or self.stop.is_set():
-            return
+    def _recover_excerpts(self, source_id: int, config: SourceConfig, limit: int) -> None:
+        recover_review_articles(
+            self.factory,
+            source_id,
+            config,
+            self.extractor,
+            max_articles=limit,
+            should_stop=self.stop.is_set,
+        )
+
+    def _prepare_text(
+        self, job_id: int, source_id: int, config: SourceConfig, limit: int
+    ) -> list[int]:
         with self.factory() as session:
             query = select(Article.id).where(
                 Article.source_id == source_id,
@@ -117,32 +131,35 @@ class Worker:
             )
             if not config.ai_processing_allowed:
                 query = query.where(Article.content.is_(None), Article.content_origin.is_(None))
-            ids = list(session.scalars(query.order_by(Article.id).limit(remaining)))
+            ids = list(session.scalars(query.order_by(Article.id).limit(limit)))
         if not ids:
-            return
+            return []
         prepare_pending_articles(
             self.factory,
             source_id,
             config,
             self.extractor,
-            max_articles=remaining,
+            max_articles=limit,
             job_id=job_id,
             should_stop=self.stop.is_set,
             article_ids=ids,
         )
-        if not config.ai_processing_allowed or self.stop.is_set():
-            return
-        _, remaining = self.remaining(job_id)
+        return ids
+
+    def _summarize(
+        self, job_id: int, source_id: int, config: SourceConfig, candidate_ids: list[int]
+    ) -> None:
+        budget = self.remaining(job_id)
         with self.factory() as session:
             ids = session.scalars(
                 select(Article.id)
                 .where(
                     Article.source_id == source_id,
                     Article.processing_status == ProcessingStatus.PENDING,
-                    Article.id.in_(ids),
+                    Article.id.in_(candidate_ids),
                 )
                 .order_by(Article.id)
-                .limit(remaining)
+                .limit(budget.results)
             ).all()
         for article_id in ids:
             if self.stop.is_set():
@@ -150,6 +167,18 @@ class Worker:
             process_article(
                 self.factory, article_id, config, self.graph, job_id=job_id, **self.model_names
             )
+
+    def process_pending(self, job_id: int, source_id: int, config: SourceConfig) -> None:
+        budget = self.remaining(job_id)
+        if not budget.results or self.stop.is_set():
+            return
+        self._recover_excerpts(source_id, config, budget.results)
+        if self.stop.is_set():
+            return
+        ids = self._prepare_text(job_id, source_id, config, budget.results)
+        if not ids or not config.ai_processing_allowed or self.stop.is_set():
+            return
+        self._summarize(job_id, source_id, config, ids)
 
     def run_job(self, claim: JobClaim) -> None:
         """External work happens only after the caller has committed the job claim."""
@@ -180,11 +209,7 @@ class Worker:
         failures = 0
         for source_id, url in sources:
             config = self.configs.get(url)
-            if (
-                config is None
-                or not config.is_active
-                or config.review_status != "rss_reader_supported"
-            ):
+            if config is None or not config.is_usable:
                 failures += 1
                 continue
             eligible.append((source_id, config))
@@ -206,11 +231,13 @@ class Worker:
                 continue
             if self.stop.is_set():
                 return
-            insertions, _ = self.remaining(claim.id)
+            budget = self.remaining(claim.id)
             with self.factory() as session, session.begin():
                 require_active_source(session, source_id, config)
-                if insertions:
-                    ingest_entries(session, entries, max_insertions=insertions, job_id=claim.id)
+                if budget.insertions:
+                    ingest_entries(
+                        session, entries, max_insertions=budget.insertions, job_id=claim.id
+                    )
                 session.get(Source, source_id).last_fetched_at = datetime.now(UTC)
             successes += 1
             self.process_pending(claim.id, source_id, config)
@@ -244,21 +271,9 @@ class Worker:
 def serve(
     factory: Callable[[], Session], settings: Settings, configs: list[SourceConfig], stop: Event
 ) -> None:
-    # Worker-only imports: API startup never loads inference libraries or a model.
-    from app.agents.graph import build_news_graph
-    from app.services.gemini_service import GeminiService
-    from app.services.summary_service import get_summary_service
-
     if not settings.GEMINI_API_KEY or not settings.GEMINI_MODEL.strip():
         raise ValueError("Worker requires GEMINI_API_KEY and GEMINI_MODEL")
-    logger.info("Loading local summarizer")
-    summarizer = get_summary_service()
-    logger.info("Local summarizer loaded; initializing provider and graph")
-    provider = GeminiService(settings)
-    try:
-        graph = build_news_graph(
-            summarizer, provider, max_attempts=settings.MAX_GRAPH_DRAFT_ATTEMPTS
-        )
+    with open_pipeline(settings) as (graph, summarize_model_name, agent_model_name):
         logger.info("Recovering abandoned database work")
         with factory() as session, session.begin():
             recover_abandoned_work(session)
@@ -272,8 +287,8 @@ def serve(
                 RSSCollector(client),
                 ArticleExtractor(client),
                 graph,
-                summarize_model_name=summarizer.model_id,
-                agent_model_name=provider.model_id,
+                summarize_model_name=summarize_model_name,
+                agent_model_name=agent_model_name,
                 stop=stop,
             )
             scheduler = build_scheduler(factory, settings, stop)
@@ -284,8 +299,6 @@ def serve(
             finally:
                 stop.set()
                 scheduler.shutdown(wait=True)
-    finally:
-        provider.close()
 
 
 def main() -> None:

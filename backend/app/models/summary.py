@@ -31,6 +31,13 @@ class Summary(Base):
     __tablename__ = "summaries"
     __table_args__ = (
         CheckConstraint("draft_attempts BETWEEN 1 AND 2", name="draft_attempts"),
+        CheckConstraint(
+            "human_review_decision IS NULL OR (human_reviewed_at IS NOT NULL AND "
+            "((human_review_decision = 'accept' AND approved) OR "
+            "(human_review_decision = 'decline' AND NOT approved AND human_review_note IS NOT NULL "
+            "AND length(trim(human_review_note)) > 0)))",
+            name="human_review",
+        ),
         CheckConstraint("jsonb_typeof(keywords) = 'array'", name="keywords_array"),
     )
 
@@ -48,16 +55,15 @@ class Summary(Base):
     keywords: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     summarize_model_name: Mapped[str] = mapped_column(String(160), nullable=False)
     agent_model_name: Mapped[str] = mapped_column(String(160), nullable=False)
-    approved: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=false()
+    approved: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false())
+    human_review_decision: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    human_review_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    human_reviewed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
     review_feedback: Mapped[str | None] = mapped_column(Text, nullable=True)
-    draft_attempts: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("1")
-    )
-    input_truncated: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, server_default=false()
-    )
+    draft_attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("1"))
+    input_truncated: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false())
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

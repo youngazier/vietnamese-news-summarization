@@ -3,45 +3,86 @@
 Read this file first at the start of every chat session, before taking any other steps.
 Keep changes simple and focused. Consult linked docs when needed rather than copying them here.
 
+## Environment Files and Secrets
+
+- Never open, read, search, or print `.env` or secret-bearing `.env.*` files, including
+  through scripts or tools. Use `.env.example` as the configuration reference instead.
+- Do not expose secrets indirectly through environment dumps, settings objects, database
+  connection details, logs, or test tracebacks. For tests using real credentials, use
+  `--tb=no` and never use `--showlocals`.
+- Applications may load their existing configuration during normal execution, but agents
+  must not inspect or display its secret values. Leave credential setup to the user.
+- Never commit secrets.
+
 ## 1. Project Structure & Module Organization
 
 ```text
 backend/
-  app/          # FastAPI entrypoint, API routes, settings, DB sessions, and models
+  app/
+    api/        # FastAPI route handlers (articles, sources, ingestion_jobs)
+    core/       # Application settings and configuration
+    db/         # Database engine/session management and connection probe
+    models/     # SQLAlchemy models and enums
+    services/   # Ingestion, RSS collection, extraction, summarization, Gemini, and job services
+    agents/     # LangGraph AI workflow (graph, nodes, prompts, schemas, state)
+    main.py     # FastAPI entrypoint
+    schemas.py  # Shared Pydantic API schemas
+    seed_sources.py  # Seed script for news sources
+    worker.py   # Background scheduler/worker entrypoint
   alembic/      # Database migration environment and revisions
-tests/          # Unit tests and PostgreSQL integration tests
+  Dockerfile    # Backend API and worker container image
+tests/          # Unit, integration (PostgreSQL), model, and live tests
 docs/           # Architecture, implementation plan, and setup guides
-frontend/       # Planned React application
+frontend/       # React, Vite, TypeScript web application (see frontend/AGENTS.md)
+compose.yaml    # Docker Compose setup for frontend, api, and worker
 pyproject.toml  # Python dependencies, packaging, and tool configuration
 uv.lock         # Locked Python dependencies
 .env.example    # Configuration template without secrets
 ```
 
-Within `backend/app`, use `api/` for handlers, `core/` for settings, `db/` for database
-connections, and `models/` for SQLAlchemy models. Add `services/` for reusable logic
-and `agents/` for the planned AI workflow as needed; avoid unnecessary empty modules.
+Within `backend/app`, `api/` holds thin route handlers, `core/` holds settings, `db/`
+manages database connections, `models/` defines SQLAlchemy models, `services/` holds
+reusable business logic (RSS collection, article extraction, image handling, local ViT5
+summarization, Gemini integration, ingestion, and job management), and `agents/` implements
+the LangGraph AI workflow. Top-level app modules include `main.py` (FastAPI app),
+`schemas.py` (shared API schemas), `seed_sources.py` (source seeding), and `worker.py`
+(APScheduler background worker).
 
 | Area | Stack | Purpose |
 | --- | --- | --- |
-| Frontend (planned) | React, Vite, TypeScript | Vietnamese news reader |
+| Frontend | React, Vite, TypeScript, Tailwind CSS v4, shadcn/ui | Vietnamese news reader |
 | Backend | Python 3.12, FastAPI, Pydantic, Uvicorn | API and configuration |
 | Database | Supabase PostgreSQL, SQLAlchemy, psycopg, Alembic | Persistence and migrations |
-| Summarization (planned) | Local ViT5, Transformers, PyTorch, SentencePiece | Vietnamese summaries |
-| AI workflow (planned) | LangGraph, Gemini via `google-genai` | Metadata, review, bounded retries |
-| Collection (planned) | httpx, feedparser, BeautifulSoup, APScheduler 3.x | RSS, extraction, scheduling |
-| Containers (planned) | Docker, Docker Compose | Separate API and worker processes |
-| Development | uv, pytest, Ruff | Dependencies, tests, linting, formatting |
+| Summarization | Local ViT5, Transformers, PyTorch, SentencePiece | Vietnamese summaries |
+| AI workflow | LangGraph, Gemini via `google-genai` | Metadata, review, bounded retries |
+| Collection | httpx, feedparser, BeautifulSoup, APScheduler 3.x | RSS, extraction, scheduling |
+| Containers | Docker, Docker Compose | Separate frontend, API, and worker processes |
+| Development | uv, pytest, Ruff, npm, ESLint | Dependencies, tests, linting, formatting |
 
-See [docs/architecture.md](docs/architecture.md) for design details and
-[docs/todos.md](docs/todos.md) for implementation progress. Article APIs, ingestion,
-AI processing, frontend, and containers are not implemented yet.
+See [docs/architecture.md](docs/architecture.md) for design details,
+[docs/todos.md](docs/todos.md) for implementation progress, and
+[frontend/AGENTS.md](frontend/AGENTS.md) for frontend-specific agent guidelines.
 
 ## 2. Build, Test, and Development Commands
 
-Run commands from the repository root. Copy `.env.example` to `.env` if `.env` does
-not exist, then configure credentials locally. Never commit secrets.
+Run commands from the repository root. The user configures local credentials in `.env`
+using `.env.example` as a template; agents must follow the environment-file rules above.
 
 ### Frontend
+
+See [frontend/AGENTS.md](frontend/AGENTS.md) for full frontend guidelines. Run frontend
+commands from `frontend/`:
+
+```sh
+cd frontend
+npm install
+npm run dev
+npm run lint
+npm run build
+```
+
+For containerized full-stack runs (`frontend`, `api`, `worker`), use `docker compose up --build`
+from the repository root (see [compose.yaml](compose.yaml)).
 
 ### Backend
 
@@ -60,14 +101,14 @@ Use `uv add` or `uv add --dev` for dependency changes; keep `pyproject.toml` and
 
 ### Database
 
-Set `DATABASE_URL` in root `.env` using `postgresql+psycopg://` and TLS.
+The user sets `DATABASE_URL` in root `.env` using `postgresql+psycopg://` and TLS.
 The database is hosted on Supabase; there is no local database build step.
 
 ```sh
 uv run --locked --env-file .env python -m app.db.probe
 uv run --locked alembic upgrade head
 uv run --locked alembic current
-uv run --locked pytest -m integration tests/integration -q
+uv run --locked pytest -m integration tests/integration -q --tb=no
 ```
 
 Use the existing Alembic setup and migrations; do not reinitialize them or use
@@ -77,6 +118,11 @@ See [docs/day-2-setup.md](docs/day-2-setup.md) for database setup details.
 ## 3. Coding Style & Naming Conventions
 
 ### Frontend
+
+- Use React, Vite, TypeScript, Tailwind CSS v4, and shadcn/ui with Base UI.
+- Follow the conventions in [frontend/AGENTS.md](frontend/AGENTS.md) (separate page
+  composition, reusable components, and data/API modules; semantic HTML; mobile-first
+  layouts; Vietnamese UI copy).
 
 ### Backend
 

@@ -15,7 +15,7 @@ def assert_head(database):
     revision = database.connection.execute(
         text("SELECT version_num FROM alembic_version")
     ).scalar_one()
-    assert revision == "0002"
+    assert revision == "0004"
     # Inspection/SELECT starts a transaction; end it before migrate() opens one.
     database.connection.rollback()
 
@@ -100,3 +100,61 @@ def test_summary_model_column_rename_preserves_data(test_database):
                 ).scalar_one()
                 == "fixture-model"
             )
+
+
+def test_article_image_column_lifecycle_preserves_article(test_database):
+    database = test_database
+    database.migrate("upgrade", "0002")
+    with database.connection.begin():
+        source_id = database.connection.scalar(
+            text(
+                "INSERT INTO sources (name, rss_url) VALUES ('Image fixture', 'https://example.com/image-rss') RETURNING id"
+            )
+        )
+        article_id = database.connection.scalar(
+            text(
+                "INSERT INTO articles (source_id, title, original_url, canonical_url) VALUES (:source, 'Image fixture', 'https://example.com/image-a', 'https://example.com/image-a') RETURNING id"
+            ),
+            {"source": source_id},
+        )
+    database.migrate("upgrade", "head")
+    with database.connection.begin():
+        assert (
+            database.connection.scalar(
+                text("SELECT image_url FROM articles WHERE id = :id"), {"id": article_id}
+            )
+            is None
+        )
+        database.connection.execute(
+            text(
+                "UPDATE articles SET image_url = 'https://cdn.example.com/lead.jpg' WHERE id = :id"
+            ),
+            {"id": article_id},
+        )
+    database.migrate("upgrade", "head")
+    with database.connection.begin():
+        assert (
+            database.connection.scalar(
+                text("SELECT image_url FROM articles WHERE id = :id"), {"id": article_id}
+            )
+            == "https://cdn.example.com/lead.jpg"
+        )
+    database.migrate("downgrade", "0002")
+    with database.connection.begin():
+        assert "image_url" not in {
+            column["name"] for column in inspect(database.connection).get_columns("articles")
+        }
+        assert (
+            database.connection.scalar(
+                text("SELECT title FROM articles WHERE id = :id"), {"id": article_id}
+            )
+            == "Image fixture"
+        )
+    database.migrate("upgrade", "head")
+    with database.connection.begin():
+        assert (
+            database.connection.scalar(
+                text("SELECT image_url FROM articles WHERE id = :id"), {"id": article_id}
+            )
+            is None
+        )

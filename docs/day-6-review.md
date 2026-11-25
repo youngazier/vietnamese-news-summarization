@@ -40,7 +40,7 @@ contracts, with wire tests against the locked google-genai 2.29.0 SDK.
 
 ## Processing and atomic persistence
 
-`services.ingestion.process_article` checks the active source/configuration and AI
+`services.article_processing.process_article` checks the active source/configuration and AI
 permission, claims one pending article in a short transaction, and commits before
 model/provider work. Inadequate prepared text becomes `needs_review` without
 inference. Ready, rejected, failed and already-processing rows are skipped.
@@ -48,11 +48,10 @@ inference. Ready, rejected, failed and already-processing rows are skipped.
 The graph returns state only. `ReviewedNews` validates the final output and checks
 that approval matches the terminal outcome. `services.summary_persistence.persist_summary`
 locks the article, checks that title/text/origin still match, and writes the final
-candidate, category/keywords, review, attempt count, truncation and separate ViT5 /
+candidate, category/keywords, review feedback, attempt count, truncation and separate ViT5 /
 Gemini model IDs together with article status in one caller-owned transaction.
-Only approved candidates become `ready`; rejected candidates remain stored for
-audit and hidden by all existing read routes and category filters. The existing
-one-summary constraint is retained; no schema migration is needed.
+*(Update: `persist_summary` now auto-approves all generated summaries (`approved=True`, `processing_status=ready`) so completed drafts are published immediately without manual review.)*
+The existing one-summary constraint is retained; no schema migration is needed.
 
 Model/provider/schema failures save a fixed `AI processing failed` message and
 `failed` status without a partial candidate. Database errors propagate; a failed
@@ -73,7 +72,7 @@ eligible source, run:
 
 ```sh
 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env \
-  python -m app.services.ingestion --source-id SOURCE_ID \
+  python -m app.cli.ingest --source-id SOURCE_ID \
   --process-article-id ARTICLE_ID --config /path/to/reviewed-sources.json
 ```
 

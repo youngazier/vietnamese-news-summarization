@@ -138,3 +138,10 @@ This records the user's one-off test authorization, not new publisher permission
 for ongoing full-article extraction, Gemini processing or generated-summary
 redistribution. The committed source configuration and unresolved policy gates
 above are unchanged.
+
+## Update — Personal daily reader auto-summarization enabled (2026-11-07)
+
+By explicit user direction for their local personal daily reader, `config/sources.json` now enables `article_extraction_allowed: true` and `ai_processing_allowed: true` for the two active sources:
+- **VnExpress** (`https://vnexpress.net/rss/tin-moi-nhat.rss`): public paths `/`, selector `article.fck_detail`
+- **Tuổi Trẻ** (`https://tuoitre.vn/home.rss`): public paths `/`, selector `div.detail-content`
+- **Thanh Niên** remains inactive (`is_active: false`, `article_extraction_allowed: false`, `ai_processing_allowed: false`).

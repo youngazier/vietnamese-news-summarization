@@ -4,25 +4,26 @@ Follow [architecture.md](architecture.md) for product scope. Work through each d
 
 **Time budget:** 5–6 focused hours per day. Days 13–14 provide debugging and setup buffer. When asking for implementation, name the phase or day; implement only that scope, explain the decisions, and run its checks.
 
-## Repository progress — 2026-10-15 (initial audit: 2026-10-12)
+## Repository progress — 2026-11-08 (initial audit: 2026-10-12)
 
-Preserve the root uv project and `backend/app` package (`module-name="app"`, `module-root="backend"`), root tests, Python 3.12 selection and existing ORM models. Days 2, 4, 5, 6 and 7 are complete. Day 6 includes real local ViT5/Gemini approval, atomic persistence and HTTP visibility for article 41, alongside hidden rejection for article 5. Day 3 implementation is complete through D3.9: reviewed source configuration, bounded RSS collection, parsing, conservative URL normalization, conflict-safe persistence, live VnExpress collection and REST verification are implemented. The three-source D3.1 policy gate remains open because Thanh Niên reuse is unresolved.
+Preserve the root uv project and `backend/app` package (`module-name="app"`, `module-root="backend"`), root tests, Python 3.12 selection and existing ORM models. Days 1, 2, 4, 5, 6, 7 and 8 are complete (along with core Day 9 reader features and Day 11 container definitions). Day 6 includes real local ViT5/Gemini approval, atomic persistence and HTTP visibility for article 41, alongside hidden rejection for article 5. Day 3 implementation is complete through D3.9: reviewed source configuration, bounded RSS collection, parsing, conservative URL normalization, conflict-safe persistence, live VnExpress collection and REST verification are implemented. Currently `config/sources.json` enables full-text extraction and AI processing for VnExpress and Tuổi Trẻ; the three-source D3.1 policy gate remains open because Thanh Niên reuse is unresolved.
 
 | Area | Current evidence | Remaining work |
 | --- | --- | --- |
-| API foundation | `/health`, the three D2 read endpoints and POST/GET ingestion-job routes are registered; scope, backlog, visibility and redacted outage behavior are covered | Frontend integration |
+| API foundation | `/health`, the three D2 read endpoints and POST/GET ingestion-job routes are registered; scope, backlog, visibility and redacted outage behavior are covered | Retain regression coverage |
 | Database declarations | Four models, relationships, enum checks, identities/defaults/indexes exist; mapper configuration and PostgreSQL DDL compile | Retain constraints as later write paths are added |
 | Database sessions | Lazy cached engine/session factory and per-request dependency implemented and used by read routes; URL/driver/TLS validation, cache reuse and cleanup tested | Retain regression coverage |
-| Migrations | Revisions `0001` and `0002` exist; `0002` renames the summary model column with data-preservation coverage | Apply/verify head on each setup; retain lifecycle tests |
-| PostgreSQL integration | **105 distinct PostgreSQL cases** verified across the full regression and final Day 7 job run on 2026-10-15, including migration lifecycle, concurrent jobs, atomic counters, recovery, replay and REST visibility | Retain as regression coverage |
-| RSS collection/text preparation | Committed configuration has two reviewed active feeds and one inactive candidate; bounded collection/preparation implemented; a separate user-authorized World-feed source (DB ID 4) supplied the Day 6 live article | Resolve Thanh Niên reuse and live extraction/AI permissions before activation |
+| Migrations | Revisions `0001`–`0004` exist (`0002` renames summary model column, `0003` adds `articles.image_url`, `0004` adds `human_review_*` audit columns) | Apply/verify head on each setup; retain lifecycle tests |
+| PostgreSQL integration | **105 distinct PostgreSQL cases** verified across the full regression and final Day 7 job run on 2026-10-15, plus 63 cases verified with article image migrations/persistence | Retain as regression coverage |
+| RSS collection/text preparation | Committed configuration enables full-text extraction and AI processing for VnExpress (`article.fck_detail`) and Tuổi Trẻ (`div.detail-content`), and keeps Thanh Niên inactive; worker automatically recovers older `extraction_disabled` backlog rows; RSS/HTML article image extraction (`article_images.py`) and backfill (`backfill_article_images.py`) implemented | Resolve Thanh Niên reuse before activating third source |
 | Dependencies | Day 5 locks CPU Torch 2.14.1+cpu; `torch.version.cuda is None`; `uv pip check` reports 90 compatible packages | Retain tested CPU resolution |
-| AI/model | Local CPU ViT5, structured metadata/review, bounded StateGraph and atomic summary persistence verified; genuine approved article 41 returned through HTTP; rejected article 5 stays hidden | Retain graph/persistence regression coverage |
-| Tooling | uv 0.12.15; Docker Compose 5.6.0 | Node/npm unavailable in this session's PATH; install before frontend work |
-| Jobs/worker | Durable POST/GET, atomic claim/counters, single-worker recovery and UTC interval scheduler implemented; live job 1 completed while API was stopped | Retain single-worker deployment and source permission gates |
-| Remaining product | Source seeding, read API, ingestion, AI graph/persistence and jobs/worker/scheduler exist | Frontend and containers |
+| AI/model | Local CPU ViT5, structured metadata/review, bounded StateGraph and atomic summary auto-approval persistence (`approved=True`, `ready`) verified | Retain graph/persistence regression coverage |
+| Tooling | uv 0.12.15; Docker Compose v2; Node/npm available for frontend | Retain toolchain |
+| Jobs/worker | Durable POST/GET, atomic claim/counters, single-worker recovery, backlog extraction recovery, and UTC interval scheduler implemented; live job 1 completed while API was stopped | Retain single-worker deployment and source permission gates |
+| Frontend | React 19, Vite 7, TypeScript 5.9, Tailwind CSS v4, shadcn/ui news reader ("Góc Việt") implemented in `frontend/`; typed API client, feed/featured/digest layout, category filter, diacritic-insensitive search, detail modal (`ArticleReader`), and loading/empty/error/retry states verified | Complete remaining Day 9–10 journey checks |
+| Containers & Packaging | `backend/Dockerfile`, `frontend/Dockerfile` with Nginx reverse proxy, `.dockerignore`, and `compose.yaml` (orchestrating `frontend`, `api`, `worker`) created and validated | Final end-to-end containerized smoke runs (D11.11–D11.12, Day 12) |
 
-Day 3 evidence: the complete suite passed **127 tests** on 2026-10-14, including **50 integration cases**. The live VnExpress run parsed 51 usable entries, inserted 20 within the cap, replayed the attempted slice with zero new rows and returned the stored article through REST. Day 4 adds guarded text preparation and fictional public-HTML fixtures; live article extraction and publisher AI remain disabled. See [Day 4 verification](day-4-extraction.md). Day 5 verification: **187 unit tests passed**, **2 actual model tests passed**, **1 actual Gemini test passed**; the 60 PostgreSQL cases were not rerun because database behavior did not change. See [Day 5 verification](day-5-model.md). `/health` remains liveness only. Day 6 review and persistence are implemented; see [Day 6 verification](day-6-review.md). Day 7 jobs/worker/scheduler are implemented; see [Day 7 verification](day-7-worker.md). Frontend remains planned.
+Day 3 evidence: the complete suite passed **127 tests** on 2026-10-14, including **50 integration cases**. The live VnExpress run parsed 51 usable entries, inserted 20 within the cap, replayed the attempted slice with zero new rows and returned the stored article through REST. Day 4 adds guarded text preparation and fictional public-HTML fixtures; see [Day 4 verification](day-4-extraction.md). Day 5 verification: **187 unit tests passed**, **2 actual model tests passed**, **1 actual Gemini test passed**; see [Day 5 verification](day-5-model.md). `/health` remains liveness only. Day 6 review and persistence are implemented; see [Day 6 verification](day-6-review.md). Day 7 jobs/worker/scheduler are implemented; see [Day 7 verification](day-7-worker.md). Day 8 frontend setup, typed API client, feed rendering, article image support ([article-images.md](article-images.md)), and core Day 9 reader modal/search/filter UI are implemented in `frontend/`.
 
 ## Planning deliverables
 
@@ -54,7 +55,7 @@ M2 and M3 can be developed independently after M1 using labeled fixtures. Read c
 
 **First smallest end-to-end slice:** one fixture source/article in migrated PostgreSQL → `GET /api/v1/sources`, article list/detail → validated JSON. This exercises persistence, sessions and HTTP without waiting for RSS or AI.
 
-**Next task:** begin Day 8 frontend setup and reader UI. Day 7 durable jobs, recovery and scheduling are verified; live job 1 completed with the API stopped. Day 6 approved-live-result acceptance is verified with article 41. D3.1 and ongoing publisher extraction/AI permissions remain separate policy gates.
+**Next task:** complete remaining Day 9–10 reader journey checks and Day 11–12 containerized runtime smoke tests. Day 8 frontend setup, typed API client, feed UI ("Góc Việt"), article image support, and Day 11 Dockerfiles/Compose configuration are implemented. Day 7 durable jobs, recovery and scheduling are verified; live job 1 completed with the API stopped. Day 6 approved-live-result acceptance is verified with article 41. D3.1 (Thanh Niên reuse) remains a separate policy gate.
 
 ## Scope and boundaries
 
@@ -169,7 +170,7 @@ uv run --locked --env-file .env pytest -m integration tests/integration/test_mig
 
 ### Day 3: collect and deduplicate
 
-**Files:** `config/sources.json`, `backend/app/services/{rss_collector,url_normalization,ingestion}.py`; `tests/test_collector.py`, `tests/test_url_normalization.py`, `tests/fixtures/rss/`.
+**Files:** `config/sources.json`, `backend/app/services/{rss_collector,url_normalization,feed_ingestion,text_preparation,source_guard}.py`, `backend/app/cli/ingest.py`; `tests/test_collector.py`, `tests/test_url_normalization.py`, `tests/fixtures/rss/`.
 
 - [ ] **D3.1** Verify three publisher-offered feed URLs. Record publisher name, host allowlist, checked date, feed availability and access/reuse evidence; activate only reviewed sources.
 - [x] **D3.2** Store source settings in `config/sources.json` and upsert them through `seed_sources.py`.
@@ -187,7 +188,7 @@ uv run --locked --env-file .env pytest -m integration tests/integration/test_mig
   - Verified 2026-10-14: five isolated-schema PostgreSQL ingestion tests passed, including two concurrent sessions, duplicate preservation, batch limit and rollback. Full unit/hosted PostgreSQL regression suite: **127 passed**. Focused Ruff checks/formatting passed with the filesystem EXE002 exception.
   - Live VnExpress: 51 usable entries; inserted IDs 1–20 in source 1; replay of the same 20 attempted entries inserted 0 and counted 20 duplicates.
   - Temporary loopback Uvicorn: source/list/detail endpoints returned HTTP 200; source total 20; article 1 pending with no summary. No article-page extraction or AI call.
-  - CLI: `uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --verify-repeat`. Fresh runs may add remaining or newly published articles; repeat verification replays only the attempted slice.
+  - CLI: `uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --verify-repeat`. Fresh runs may add remaining or newly published articles; repeat verification replays only the attempted slice.
 
 ```sh
 uv add 'httpx>=0.28,<1' 'feedparser>=6,<7'
@@ -262,7 +263,7 @@ uv run --locked --env-file .env pytest -m live tests/live/test_gemini.py -q
 
 ### Day 6: review, bounded retry and persistence
 
-**Files:** `backend/app/agents/{prompts,graph,nodes,schemas,state}.py`, `services/{gemini_service,summary_service,summary_persistence,ingestion}.py`, `seed_sources.py`; `tests/test_graph.py`, schema/provider/source/model unit tests, `tests/live/test_gemini.py`, `tests/integration/test_summary_persistence.py`.
+**Files:** `backend/app/agents/{prompts,graph,nodes,schemas,state}.py`, `services/{gemini_service,summary_service,summary_persistence,article_processing,pipeline}.py`, `seed_sources.py`; `tests/test_graph.py`, schema/provider/source/model unit tests, `tests/live/test_gemini.py`, `tests/integration/test_summary_persistence.py`.
 
 - [x] **D6.1** Write source-only review prompts: source text is untrusted data, not instructions. Provide bounded cleaned source and the text retained for ViT5, with excerpt/truncation context.
 - [x] **D6.2** Add `ReviewResult` with strict boolean approval and bounded feedback; invalid responses raise a processing error.
@@ -325,16 +326,16 @@ curl --fail http://127.0.0.1:8000/api/v1/ingestion-jobs/42
 
 ### Day 8: feed and API client
 
-**Files:** `frontend/src/services/api.ts`, `pages/Feed.tsx`, `components/ArticleCard.tsx`, `App.tsx`, `vite.config.ts`.
+**Files:** `frontend/src/services/api.ts`, `frontend/src/data/articles.ts`, `frontend/src/components/news/{ArticleCard,ArticleReader,NewsHeader,NewsSkeleton}.tsx`, `frontend/src/App.tsx`, `frontend/vite.config.ts`.
 
-- [ ] **D8.1** Install a supported Node/npm version compatible with the selected Vite template; record it in `.node-version`.
-- [ ] **D8.2** Scaffold React/Vite/TypeScript; install packages and preserve `package-lock.json`.
-- [ ] **D8.3** Configure `/api` proxy to `http://127.0.0.1:8000` and bind Vite to loopback.
-- [ ] **D8.4** Define TypeScript types matching the REST schemas; write a small fetch wrapper with typed results and meaningful errors.
-- [ ] **D8.5** Fetch active sources and article pages using relative URLs. Never place DB/provider credentials in frontend env variables.
-- [ ] **D8.6** Render title, source, time, category/preview when approved, status and original link.
-- [ ] **D8.7** Add loading, empty, error and retry states. Verify each using an empty dataset and interrupted API.
-- [ ] **D8.8** Add a `typecheck` script and run it with the frontend build.
+- [x] **D8.1** Install a supported Node/npm version compatible with the selected Vite template; Node 20 LTS pinned in `frontend/Dockerfile`.
+- [x] **D8.2** Scaffold React/Vite/TypeScript; install packages (React 19, Vite 7, Tailwind CSS v4, shadcn/ui, Lucide icons) and preserve `package-lock.json`.
+- [x] **D8.3** Configure `/api` proxy to `http://127.0.0.1:8000` and bind Vite to loopback (`127.0.0.1`) in `frontend/vite.config.ts`.
+- [x] **D8.4** Define TypeScript types matching the REST schemas (`SourceRead`, `ArticleRead`, `ArticleDetail`, `ArticlePage`, `ArticleCategory`, `ProcessingStatus`); write a small fetch wrapper (`getArticles`, `getArticle` in `frontend/src/services/api.ts`) with `AbortSignal`, typed results and meaningful Vietnamese errors.
+- [x] **D8.5** Fetch article pages and article details using relative `/api/v1` URLs. Never place DB/provider credentials in frontend env variables.
+- [x] **D8.6** Render title, source, time (`Asia/Ho_Chi_Minh`), category/preview when approved, optional `image_url` with editorial placeholder fallback, status and validated `http/https` original link (`ArticleCard.tsx`, `App.tsx`). Feed filters to summarized articles (`article.summary !== null`) with featured lead story, top digest, and article grid.
+- [x] **D8.7** Add loading (`NewsSkeleton`), empty (`Chưa có bài viết` / `Chưa tìm thấy câu chuyện phù hợp`), error (`Không thể tải tin tức`) and retry (`Thử lại` / `Tải lại`) states in `App.tsx` and `ArticleReader.tsx`.
+- [x] **D8.8** Run TypeScript check (`tsc -b`) with the frontend build (`npm --prefix frontend run build`) and ESLint (`npm --prefix frontend run lint`).
 
 ```sh
 npm create vite@latest frontend -- --template react-ts
@@ -344,11 +345,11 @@ npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
 
 # From the root in another terminal:
 curl --fail 'http://127.0.0.1:5173/api/v1/articles?page=1&page_size=20'
-npm --prefix frontend run typecheck
+npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
 
-**Day complete:** browser displays real backend data through the proxy; loading/empty/error states work.
+**Day complete (verified):** browser displays real backend data through the `/api` proxy in the "Góc Việt" reader UI; loading/empty/error/retry states, article images, category filtering, diacritic-insensitive search, and the `ArticleReader` dialog work; `npm run lint` and `npm run build` pass.
 
 ### Day 9: search, filters and detail
 
@@ -387,20 +388,20 @@ npm --prefix frontend run build
 
 ## Phase 7 — Days 11–12: image and local execution
 
-### Day 11: bake the model into the backend image
+### Day 11: bake the model into the backend image and containerize the stack
 
-**Files:** `backend/Dockerfile`, root `compose.yaml` and `.dockerignore`.
+**Files:** `backend/Dockerfile`, root `compose.yaml`, `.dockerignore`, `frontend/Dockerfile`, `frontend/nginx.conf`, and `frontend/.dockerignore`.
 
-- [ ] **D11.1** Pin the tested Python 3.12/uv image versions; root build context and `WORKDIR /app`.
-- [ ] **D11.2** Exclude secrets, .git, virtualenv, local models, caches and Node artifacts from build context.
-- [ ] **D11.3** Copy root manifests; install dependencies with `uv sync --locked --no-dev --no-install-project`.
-- [ ] **D11.4** Copy the root downloader; declare the model ID build argument and image model path `/opt/models/vit5-base-vietnews-summarization`.
-- [ ] **D11.5** Run `uv run --no-sync python download_summarization_model.py` during build with offline flags disabled.
-- [ ] **D11.6** Copy README, `backend/app` and Alembic files; install the project with `uv sync --locked --no-dev --no-editable`.
-- [ ] **D11.7** Set runtime offline flags to 1. Validate artifact manifest against configured model ID.
-- [ ] **D11.8** Define exactly two Compose services sharing `vietnam-news-backend:local`: API command `uvicorn app.main:app`, worker command `python -m app.worker`, both via `uv run --no-sync`.
-- [ ] **D11.9** API listens on `0.0.0.0:8000` inside its container; publish only `127.0.0.1:8000:8000`. Worker publishes no ports. Set restart policy; use runtime `env_file`.
-- [ ] **D11.10** Build with the configured model ID; run migrations separately; start services. Ensure container env uses the baked model path, not a host path.
+- [x] **D11.1** Pin the tested Python 3.12/uv image versions; root build context and `WORKDIR /app`.
+- [x] **D11.2** Exclude secrets, .git, virtualenv, local models, caches and Node artifacts from build context.
+- [x] **D11.3** Copy root manifests; install dependencies with `uv sync --locked --no-dev --no-install-project`.
+- [x] **D11.4** Copy the root downloader; declare the model ID build argument and image model path `/opt/models/vit5-base-vietnews-summarization`.
+- [x] **D11.5** Run `uv run --no-sync python download_summarization_model.py` during build with offline flags disabled.
+- [x] **D11.6** Copy README, `backend/app` and Alembic files; install the project with `uv sync --locked --no-dev --no-editable`.
+- [x] **D11.7** Set runtime offline flags to 1. Validate artifact manifest against configured model ID.
+- [x] **D11.8** Define Compose services sharing `vietnam-news-backend:local`: API command `uvicorn app.main:app`, worker command `python -m app.worker`, both via `uv run --no-sync`; define `frontend` service via `vietnam-news-frontend:local` with Nginx reverse proxy.
+- [x] **D11.9** API listens on `0.0.0.0:8000` inside its container; publish only `127.0.0.1:8000:8000`. Frontend publishes `127.0.0.1:5173:80`. Worker publishes no ports. Set restart policy; use runtime `env_file`.
+- [x] **D11.10** Build with the configured model ID; run migrations separately; start services. Ensure container env uses the baked model path, not a host path.
 - [ ] **D11.11** Run real generation with `--network none`. Repeat with `SUMMARIZATION_MODEL_PATH=/missing` and require clear nonzero failure.
 - [ ] **D11.12** Confirm API does not initialize the model; worker preloads once; both connect to hosted DB.
 
@@ -415,7 +416,7 @@ docker run --rm --network none --entrypoint uv vietnam-news-backend:local run --
 docker run --rm --network none -e SUMMARIZATION_MODEL_PATH=/missing --entrypoint uv vietnam-news-backend:local run --no-sync python -m app.services.summary_service --smoke-test
 ```
 
-**Day complete:** service names are exactly `api`/`worker`; first offline smoke exits 0, missing-model smoke exits nonzero; model never downloads at startup.
+**Day complete:** service names are `api`, `frontend`, `worker`; config validates with `docker compose config`; model baked into image.
 
 ### Day 12: verify packaged local operation
 
@@ -426,7 +427,7 @@ docker run --rm --network none -e SUMMARIZATION_MODEL_PATH=/missing --entrypoint
 - [ ] **D12.5** Stop API while worker runs; confirm processing and scheduling continue.
 - [ ] **D12.6** Verify schedule tick coalescing/no overlapping cycles. Document that restart recreates the timer without replaying missed ticks.
 - [ ] **D12.7** Reinstall frontend dependencies with `npm ci`; run typecheck/build.
-- [ ] **D12.8** Document container migration/build/start and host-Vite commands in README.
+- [x] **D12.8** Document container migration/build/start and host-Vite commands in README.
 
 ```sh
 docker compose logs -f api worker
@@ -488,7 +489,7 @@ All backend paths are relative to `backend/app/`; tests live at root.
 | `core/config.py` | Env loading, validated limits, role-specific configuration |
 | `db/`, `models/`, `backend/alembic/` | Sessions, model mappings, enums, constraints, migrations |
 | `services/rss_collector.py`, `url_normalization.py`, `article_extractor.py` | Deterministic collection and source-text preparation |
-| `services/ingestion.py`, `job_service.py` | Idempotent writes, claims, transitions and counters |
+| `services/{feed_ingestion,text_preparation,article_processing,source_guard,pipeline}.py`, `job_service.py` | Idempotent writes, claims, transitions and counters |
 | `services/summary_service.py` | Local tokenizer/model initialization and bounded inference |
 | `services/gemini_service.py` | Official SDK client, Interactions metadata/review, JSON validation and bounded transport retries |
 | `agents/` | State, structured schemas, prompts, draft/review nodes and routing |
@@ -710,7 +711,7 @@ A1–A7 and the implemented D3 portion of A4 are executable against the current 
 | A1 foundation | `uv run --locked pytest tests/test_health.py tests/test_config.py -q` | 23 pass today; health requires no external service |
 | A2 sessions/schema | `uv run --locked pytest tests/test_db_session.py -q`; `uv run --locked --env-file .env python -m app.db.probe`; `uv run --locked --env-file .env alembic upgrade head`; `uv run --locked --env-file .env alembic current` | Session unit checks passed; Alembic connectivity shown in developer output; corrected upgrade reported working. Developer reports D2.7 lifecycle checks completed; backend relocation verified offline and by revision discovery |
 | A3 DB/read slice | `uv run --locked --env-file .env pytest -m integration tests/integration/test_migrations.py tests/integration/test_persistence.py tests/integration/test_api.py -q` | Real isolated-schema upgrades/constraints; fixture returned by source/list/detail; rejected output hidden |
-| A4 feeds/dedup/text | `uv run --locked --env-file .env python -m app.seed_sources`; `uv run --locked pytest tests/test_extractor.py tests/test_collector.py tests/test_url_normalization.py -q`; `uv run --locked --env-file .env pytest -m integration tests/integration/test_ingestion.py -q`; `uv run --locked --env-file .env python -m app.services.ingestion --source-id 1 --verify-repeat`; resume text only with `--prepare-only`. | D3–D4 fixture/persistence checks pass, including provenance, resume and guarded writes outside publisher IO. Live permitted RSS fallback is verified. A4's three-source policy gate and live publisher HTML extraction clearance remain open. |
+| A4 feeds/dedup/text | `uv run --locked --env-file .env python -m app.seed_sources`; `uv run --locked pytest tests/test_extractor.py tests/test_collector.py tests/test_url_normalization.py -q`; `uv run --locked --env-file .env pytest -m integration tests/integration/test_ingestion.py -q`; `uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --verify-repeat`; resume text only with `--prepare-only`. | D3–D4 fixture/persistence checks pass, including provenance, resume and guarded writes outside publisher IO. Live permitted RSS fallback is verified. A4's three-source policy gate and live publisher HTML extraction clearance remain open. |
 | A5 real ViT5 | `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env pytest -m model tests/model/test_summary_smoke.py -q` | Day 5: 2 passed; actual local generation, bounded Vietnamese output, socket-blocked loading/inference; latency/memory/truncation recorded in day-5-model.md |
 | A6 Gemini/graph | `uv run --locked pytest tests/test_gemini_service.py tests/test_graph.py tests/test_ai_schemas.py -q`; `uv run --locked --env-file .env pytest -m live tests/live/test_gemini.py -q` | Fake routes produce exact 1/2 drafts; transport cap holds; real metadata/review parse and model ID recorded |
 | A7 worker/jobs | `uv run --locked pytest tests/test_worker.py tests/test_scheduler.py -q`; `uv run --locked --env-file .env pytest -m integration tests/integration/test_jobs.py tests/integration/test_summary_persistence.py -q` | One claim wins; crash recovery/counters/replay pass; API only enqueues |

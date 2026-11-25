@@ -24,9 +24,7 @@ pytestmark = pytest.mark.integration
 def saved_article(db_session):
     """A committed source/article for checks that need valid parent rows."""
     with db_session.begin():
-        source = Source(
-            name="D2 test fixture", rss_url="https://example.com/fixture.xml"
-        )
+        source = Source(name="D2 test fixture", rss_url="https://example.com/fixture.xml")
         article = Article(
             source=source,
             title="Bài viết thử nghiệm",
@@ -190,9 +188,7 @@ def test_keywords_must_be_json_array(db_session, saved_article):
         db_session.add(summary)
     with pytest.raises(IntegrityError) as error, db_session.begin():
         db_session.execute(
-            text(
-                "UPDATE summaries SET keywords = CAST(:value AS jsonb) WHERE id = :id"
-            ),
+            text("UPDATE summaries SET keywords = CAST(:value AS jsonb) WHERE id = :id"),
             {"value": '{"keyword": "invalid object"}', "id": summary.id},
         )
     assert_constraint(error, "ck_summaries_keywords_array")
@@ -213,9 +209,7 @@ def test_timezone_round_trip(db_session, saved_article):
 
 def test_transaction_rollback_removes_partial_write(db_session):
     with pytest.raises(RuntimeError, match="simulated failure"), db_session.begin():
-        db_session.add(
-            Source(name="Rolled back", rss_url="https://example.com/rollback.xml")
-        )
+        db_session.add(Source(name="Rolled back", rss_url="https://example.com/rollback.xml"))
         db_session.flush()  # Actually INSERT before the failure.
         raise RuntimeError("simulated failure")
     assert db_session.scalar(select(func.count()).select_from(Source)) == 0
@@ -234,9 +228,7 @@ def test_article_deletion_cascades_to_summary(db_session, saved_article):
     with db_session.begin():
         db_session.add(make_summary(saved_article.id))
     with db_session.begin():
-        db_session.execute(
-            text("DELETE FROM articles WHERE id = :id"), {"id": saved_article.id}
-        )
+        db_session.execute(text("DELETE FROM articles WHERE id = :id"), {"id": saved_article.id})
     assert db_session.scalar(select(func.count()).select_from(Summary)) == 0
     assert db_session.scalar(select(func.count()).select_from(Source)) == 1
 
@@ -253,8 +245,7 @@ def test_negative_outcome_counters(db_session, counter):
     with pytest.raises(IntegrityError) as error, db_session.begin():
         db_session.execute(
             text(
-                f"UPDATE ingestion_jobs SET {counter} = -1, "
-                "articles_processed = -1 WHERE id = :id"
+                f"UPDATE ingestion_jobs SET {counter} = -1, articles_processed = -1 WHERE id = :id"
             ),
             {"id": job.id},
         )

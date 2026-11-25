@@ -14,6 +14,8 @@ from app.services.model_artifacts import ModelArtifactError, validate_artifacts
 MAX_INPUT_TOKENS = 1024
 MAX_NEW_TOKENS = 256
 MAX_SOURCE_CHARACTERS = 20_000
+LONG_INPUT_TOKENS = 400
+LONG_DRAFT_MIN_TOKENS = 48
 
 # Authored fictional text: safe for independent model/provider feasibility checks.
 SMOKE_TITLE = "Thư viện thử nghiệm mở lớp kỹ năng số miễn phí"
@@ -80,6 +82,8 @@ class SummaryService:
             token_ids.pop()
         truncated = len(token_ids) + 1 > MAX_INPUT_TOKENS
         retained = token_ids[: MAX_INPUT_TOKENS - 1]
+        long_input = len(retained) >= LONG_INPUT_TOKENS
+        length_penalty = (1.2, 1.0)[attempt - 1] if long_input else (1.0, 0.8)[attempt - 1]
         input_ids = torch.tensor([retained + [self.tokenizer.eos_token_id]], dtype=torch.long)
         inference_text = self.tokenizer.decode(retained, skip_special_tokens=True)
         with torch.inference_mode():
@@ -87,8 +91,9 @@ class SummaryService:
                 input_ids=input_ids,
                 attention_mask=torch.ones_like(input_ids),
                 max_new_tokens=MAX_NEW_TOKENS,
+                min_new_tokens=LONG_DRAFT_MIN_TOKENS if long_input else 0,
                 num_beams=4 if attempt == 1 else 2,
-                length_penalty=1.0 if attempt == 1 else 0.8,
+                length_penalty=length_penalty,
                 no_repeat_ngram_size=3,
                 early_stopping=True,
                 do_sample=False,

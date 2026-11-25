@@ -41,6 +41,9 @@ class ArticleExtractionPolicy(BaseModel):
         return self
 
 
+RSS_READER_SUPPORTED = "rss_reader_supported"
+
+
 class SourceConfig(BaseModel):
     """Policy metadata stays in JSON; only existing Source columns are seeded."""
 
@@ -62,6 +65,11 @@ class SourceConfig(BaseModel):
     ai_processing_review_note: str | None = Field(default=None, min_length=1)
     availability: dict[str, str | int | bool]
 
+    @property
+    def is_usable(self) -> bool:
+        """Active source whose RSS reader use has been reviewed."""
+        return self.is_active and self.review_status == RSS_READER_SUPPORTED
+
     @model_validator(mode="after")
     def validate_review(self) -> "SourceConfig":
         for url in (self.rss_url, self.official_rss_url, self.robots_url):
@@ -75,7 +83,7 @@ class SourceConfig(BaseModel):
             ):
                 raise ValueError("Source URLs must use HTTPS and an exact allowed host")
         if self.is_active and (
-            self.review_status != "rss_reader_supported"
+            self.review_status != RSS_READER_SUPPORTED
             or self.availability.get("status") != 200
             or self.availability.get("official_link") is not True
             or self.availability.get("robots_allowed") is not True

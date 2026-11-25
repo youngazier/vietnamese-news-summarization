@@ -11,6 +11,7 @@ from urllib.parse import urljoin, urlsplit
 import feedparser
 import httpx
 from app.seed_sources import SourceConfig
+from app.services.article_images import image_from_feed
 from app.services.url_normalization import normalize_url
 from bs4 import BeautifulSoup
 
@@ -44,6 +45,7 @@ class FeedEntry:
     original_url: str
     published_at: datetime | None
     rss_description: str | None
+    image_url: str | None = None
 
 
 def clean_html(value: str) -> str:
@@ -126,7 +128,7 @@ class RSSCollector:
 
     def fetch(self, source: SourceConfig) -> bytes:
         """Fetch an active feed; validate redirects before following them."""
-        if not source.is_active or source.review_status != "rss_reader_supported":
+        if not source.is_usable:
             raise FeedFetchError("Source is inactive or RSS use is unresolved")
 
         current_url = source.rss_url
@@ -246,6 +248,7 @@ def parse_feed(
                 original_url=original_url,
                 published_at=parse_publication_date(item),
                 rss_description=description or None,
+                image_url=image_from_feed(item, original_url),
             )
         )
 

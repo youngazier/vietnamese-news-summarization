@@ -60,8 +60,8 @@ Create a Vietnamese-language news website that collects articles from a small, c
 | Text extraction | Python HTML extraction library, e.g. BeautifulSoup | Fetch only publisher-allowed URLs; fallback to RSS excerpt |
 | Scheduling | APScheduler **3.x** | Standalone scheduler inside worker; explicitly pin major version |
 | Job coordination | PostgreSQL `ingestion_jobs` table | Lightweight polling; **not** a full distributed queue |
-| Local frontend serving | Vite on host | Loopback-only dev server; proxy `/api` to FastAPI; Nginx deferred |
-| Backend containers | Docker + Docker Compose | **Exactly two default Compose services: `api` and `worker`** |
+| Frontend serving | Nginx container (or Vite on host) | Production Nginx container (`frontend` service) or loopback Vite dev server proxying `/api` to FastAPI |
+| Containers | Docker + Docker Compose | **Three Compose services: `frontend`, `api`, and `worker`** |
 | Testing and quality | pytest, Ruff, httpx test client | Frontend build/type check as appropriate |
 | Basic operations | Structured logs, `GET /health` | No Prometheus/Grafana |
 
@@ -82,28 +82,28 @@ flowchart TB
     Provider[Gemini Developer API]
     DB[(Supabase PostgreSQL)]
 
-    subgraph Host[Local machine]
-      NG[Vite on loopback + API proxy]
-      subgraph Compose[Default Docker Compose: 2 Python services]
+    subgraph Host[Host / Container Environment]
+      subgraph Compose[Docker Compose: 3 services]
+        FE[frontend: Nginx + React SPA]
         API[api: FastAPI / SQLAlchemy]
         WK[worker: APScheduler + RSS + LangGraph + local ViT5]
       end
     end
 
-    Reader -->|Local HTTP| NG
-    NG -->|Static HTML/CSS/JS| Reader
-    NG -->|/api/*| API
+    Reader -->|HTTP :5173| FE
+    FE -->|Static HTML/CSS/JS| Reader
+    FE -->|Internal proxy /api/*| API
     API <-->|SQLAlchemy queries| DB
     WK <-->|Jobs, articles, summaries| DB
     Publisher -->|HTTP/RSS fetch| WK
     WK <-->|Classification / keywords / review| Provider
 ```
 
-**Interpretation:** The two Compose services are the Python `api` and `worker`, sharing one image containing the ViT5 model. Vite runs on the host, bound to loopback. Supabase and Gemini remain external managed services, so local operation still needs network access to them. Public hosting, Nginx, TLS, authentication, and authorization are deferred.
+**Interpretation:** Compose orchestrates three services: `frontend` (Nginx serving built React static assets and reverse-proxying `/api` to the backend), `api` (FastAPI), and `worker` (APScheduler, ViT5, and Gemini review), with `api` and `worker` sharing the backend image containing the ViT5 model. For host-based development, Vite can also run directly on the host and proxy to loopback. Supabase and Gemini remain external managed services.
 
 ### 3.2 Request path vs ingestion path
 
-- **Read path:** Browser → Vite proxy → FastAPI → SQLAlchemy → Supabase → JSON → React.
+- **Read path:** Browser → Nginx reverse proxy (or Vite dev proxy) → FastAPI → SQLAlchemy → Supabase → JSON → React.
 - **Scheduled write path:** APScheduler (worker) → RSS collector → canonicalization/dedup → extract → LangGraph → SQLAlchemy → Supabase.
 - **Manual write path (local user):** Unauthenticated local request → FastAPI inserts **pending job** → worker polls/claims job → same ingestion pipeline; API returns `202 Accepted` immediately.
 - The browser never connects to worker, database service credentials, or the LLM provider directly.
@@ -145,15 +145,21 @@ sequenceDiagram
 
 ---
 
-## 4. Two Compose services: exact responsibilities
+## 4. Three Compose services: exact responsibilities
 
-### 4.1 Service `api`
+### 4.1 Service `frontend`
+
+**Runs:** `nginx -g "daemon off;"` (built via multi-stage `node:20-alpine` → `nginx:alpine`)  
+**Responsibilities:** serve compiled React static assets (`/usr/share/nginx/html`) with SPA fallback (`try_files $uri $uri/ /index.html`); reverse-proxy `/api/` requests to `http://api:8000/api/` over the internal Docker network; publish `127.0.0.1:5173:80` on the host.  
+**Does not:** hold database or Gemini credentials, talk directly to Supabase, or run Node.js at runtime.
+
+### 4.2 Service `api`
 
 **Runs:** `uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000`  
-**Responsibilities:** read article/search endpoints; response validation; source listing; local manual job submission without auth; job status; `/health`.  
+**Responsibilities:** read article/search endpoints; response validation; source listing; local manual job submission without auth; manual review endpoints; job status; `/health`.  
 **Does not:** run APScheduler, fetch RSS, run expensive LangGraph workflows as part of HTTP requests, or receive scheduler callbacks.
 
-### 4.2 Service `worker`
+### 4.3 Service `worker`
 
 **Runs:** `uv run --no-sync python -m app.worker` with one APScheduler 3.x `BackgroundScheduler`  
 **Responsibilities:** initialize `services/summary_service.py` once at worker startup to load local ViT5 before processing jobs; one standalone APScheduler; enqueue periodic collection jobs; claim pending jobs; collect feeds; process new articles; run one LangGraph invocation per article; write status/result; bounded retries and logged failures.  
@@ -161,10 +167,21 @@ sequenceDiagram
 
 **MVP worker behavior:** one worker replica; one processing loop at a time, separate insertion/result caps (default 20 each) and configurable collection interval of 30 minutes. Poll the jobs table every 10 seconds only when useful; idle polling is acceptable for this small workload. Avoid running overlapping ingestion cycles.
 
-### 4.3 Example base `compose.yaml` (backend only)
+### 4.4 `compose.yaml` (Frontend, API and Worker)
 
 ```yaml
 services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: vietnam-news-frontend:local
+    ports:
+      - "127.0.0.1:5173:80"
+    depends_on:
+      - api
+    restart: unless-stopped
+
   api:
     build:
       context: .
@@ -172,6 +189,8 @@ services:
     image: vietnam-news-backend:local
     command: uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000
     env_file: [.env]
+    environment:
+      - SUMMARIZATION_MODEL_PATH=/opt/models/vit5-base-vietnews-summarization
     ports: ["127.0.0.1:8000:8000"]
     restart: unless-stopped
 
@@ -182,19 +201,19 @@ services:
     image: vietnam-news-backend:local
     command: uv run --no-sync python -m app.worker
     env_file: [.env]
+    environment:
+      - SUMMARIZATION_MODEL_PATH=/opt/models/vit5-base-vietnews-summarization
     restart: unless-stopped
 ```
 
-- Both use the **same Dockerfile/image and code**, different process entry points.
+- `api` and `worker` use the **same backend Dockerfile/image and code**, different process entry points.
+- `frontend` uses a multi-stage Dockerfile (`node:20-alpine` build + `nginx:alpine` runtime) that serves static React assets and reverse-proxies `/api/` to `http://api:8000/api/` inside the Docker network.
 - Supabase is external: **no PostgreSQL container**.
-- Vite runs on the host, bound to `127.0.0.1`; no Nginx or public deployment in the current scope.
-- `127.0.0.1:8000` host binding is intentional: the API is only directly reachable locally for the single user.
-- Development Vite can proxy `/api` to `http://localhost:8000`, avoiding unnecessary CORS complexity. Keep Vite bound to loopback; public access is deferred.
-- Use `docker compose config` to validate Compose and `docker compose logs -f api worker` for troubleshooting.
-- Run migrations separately, before relying on either service: `docker compose run --rm api uv run --no-sync alembic upgrade head`.
-- **Note:** These two containers run the backend. `docker compose up` alone does **not** start the host Vite server.
+- Both `127.0.0.1:5173` (frontend) and `127.0.0.1:8000` (API) are published on loopback.
+- Use `docker compose config` to validate Compose and `docker compose logs -f frontend api worker` for troubleshooting.
+- Run migrations separately, before relying on the services: `docker compose run --rm api uv run --no-sync alembic upgrade head`.
 
-### 4.4 Build-time summarization model download
+### 4.5 Build-time summarization model download
 
 - Add **`download_summarization_model.py` at the repository root** when implementing this phase. The Docker build context must be the root so `backend/Dockerfile` can copy this script and the root uv dependency files.
 - Install locked Python dependencies with `uv sync --locked --no-dev` before invoking `RUN uv run --no-sync python download_summarization_model.py` during the Docker build. Copy the source needed to install the existing root project before syncing, or use a dependency-only layer followed by the project sync.
@@ -327,6 +346,78 @@ For a **single worker**, a simple transaction with an atomic claim is acceptable
 
 **Volume/cost control:** `JOB_MAX_ARTICLE_INSERTIONS=20` and `JOB_MAX_ARTICLE_RESULTS=20`; consume pending backlog before new processing. Bound text/tokens, HTTP retries and job backlog. Use deterministic RSS fixtures for tests.
 
+### 6.1 Phase 3: RSS collection and usable text (Days 3–4)
+
+RSS is a publisher-provided XML feed of recent entries: titles, original links,
+optional publication dates and descriptions. A description is often only an
+excerpt. Phase 3 discovers articles, stores them without duplicates, and prepares
+source text with provenance and a preliminary quality decision. AI generation and
+review belong to later phases.
+
+```mermaid
+flowchart LR
+    Config[Validate source configuration] --> Feed[Fetch and parse RSS]
+    Feed --> Insert[Normalize URLs and insert new articles]
+    Insert --> Pending[Read oldest unprepared pending rows]
+    Pending --> Text[Permitted HTML extraction or RSS fallback]
+    Text --> Quality{At least 200 characters?}
+    Quality -->|Yes| ReadyForProcessing[Save text; remain pending]
+    Quality -->|No| Review[Save available text; needs_review]
+```
+
+| Step | Code entry point | Behavior |
+| --- | --- | --- |
+| Configure and seed | [`seed_sources.py`](../backend/app/seed_sources.py): `SourceConfig`, `ArticleExtractionPolicy`, `load_source_config()`, `seed_sources()` | Pydantic validates `config/sources.json` before DB access. `SourceConfig` holds feed/review settings; its optional extraction policy holds public path prefixes, a CSS content selector and a review note. Seed only `name`, `rss_url`, `is_active`; upsert by RSS URL. Other policy fields stay in JSON. |
+| Fetch and parse | [`rss_collector.py`](../backend/app/services/rss_collector.py): `RSSCollector.collect()` → `fetch()` → `parse_feed()` | Return `FeedEntry` dataclasses. Clean title/description HTML; skip missing titles and invalid/unreviewed links. Convert known dates to UTC, otherwise NULL. Reject malformed feeds; a valid empty feed succeeds. |
+| Establish identity | [`url_normalization.py`](../backend/app/services/url_normalization.py): `normalize_url()` | Lowercase scheme/host; remove default ports, fragments and known tracking parameters. Preserve path differences and identifying query parameters. Store both original and canonical URLs. |
+| Insert metadata | [`feed_ingestion.py`](../backend/app/services/feed_ingestion.py): `ingest_entries()` → `insert_article()` | PostgreSQL canonical-URL uniqueness plus `ON CONFLICT DO NOTHING RETURNING id` makes duplicates no-ops, including concurrent inserts. Duplicates consume no insertion capacity and never overwrite existing articles. |
+| Prepare text | [`text_preparation.py`](../backend/app/services/text_preparation.py): `prepare_pending_articles()` → [`ArticleExtractor.extract()`](../backend/app/services/article_extractor.py) | Select oldest source rows with status `pending`, NULL content and NULL origin. Attempt enabled public-HTML extraction; fall back to permitted RSS descriptions when disabled, unavailable or inadequate. Remove markup/noise and retain at most 20,000 characters. |
+| Persist quality | `prepare_pending_articles()` | Save `ExtractionResult.text`, origin, status and redacted reason together. At least 200 cleaned characters stays `pending`; short/missing text becomes `needs_review`. Origin is `extracted` or `rss_excerpt`, and NULL when text is absent. |
+
+**HTTP and access rules.** Requests use an identifying user agent, a 15-second
+HTTP timeout and a one-second request delay. Each feed, robots or article fetch
+has at most three requests shared between redirects and retries, with bounded
+backoff. Validate HTTPS/exact hosts before following redirects. Cap decoded feed
+and HTML bodies at 2 MiB; robots at 256 KiB. Enabled article extraction additionally
+checks public paths and current robots rules for the application user agent.
+Robots rules describe crawler access; reuse and AI processing require separate
+review. The RSS collector uses recorded robots-review evidence in configuration.
+
+**Transactions and recovery.** Feed fetching finishes before the insertion
+transaction. Text preparation closes its snapshot transaction before publisher
+IO, then commits each result separately. Before saving, recheck source activation
+and RSS identity; a conditional update requires the article still be pending,
+unprepared, and have the same URL/description. Concurrently changed rows are
+skipped. Committed preparation survives interruption; subsequent runs resume old
+unprepared rows even if absent from today's feed. Already prepared and non-pending
+rows are preserved. Insertion and preparation have separate default limits of 20,
+so newly inserted rows may wait behind older backlog.
+
+**Current boundary and verification.** The committed configuration activates
+VnExpress (`article.fck_detail`) and Tuổi Trẻ (`div.detail-content`) with both
+full-text article extraction and AI processing enabled (`article_extraction_allowed=true`,
+`ai_processing_allowed=true`), while leaving Thanh Niên inactive. When the worker runs,
+`recover_review_articles()` retries older excerpt-only `needs_review` rows (`extraction_disabled; ...`),
+extracts full text, and returns them to `pending` for AI summarization. All generated summaries
+are automatically marked `approved=true` and `ready` upon persistence so the reader UI
+displays summarized articles without manual review.
+Fixed HTTP fixtures and isolated PostgreSQL tests cover retries, redirects,
+deduplication races, provenance, transaction boundaries and resumable writes.
+See [Phase 3 acceptance](todos.md#phase-3--days-34-rss-and-usable-text) and
+[source evidence](source-evidence.md) for remaining policy gates.
+
+```sh
+uv run --locked --env-file .env python -m app.seed_sources
+uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --verify-repeat
+uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --prepare-only
+```
+
+`--verify-repeat` replays only the attempted feed slice and requires zero new
+insertions. `--prepare-only` skips feed collection and resumes stored text work;
+after draining the backlog, repeating it prepares zero rows. Both commands report
+IDs/counters; extraction logs include source/article/job IDs and fixed failure
+classes without raw payloads or credentials.
+
 ---
 
 ## 7. LangGraph AI workflow (MVP)
@@ -345,7 +436,7 @@ flowchart TD
 
 - One **graph invocation per article**; collection is outside the graph.
 - The graph uses deterministic orchestration: ViT5 generates summary text locally; Gemini returns category/keywords and reviews the result. Gemini does not replace ViT5 as the summarization model.
-- On a rejected draft, retry ViT5 with a bounded alternate generation strategy and recompute/review metadata. ViT5 is not a chat model: do not append Gemini feedback as instructions to the source. If a second attempt is still rejected, mark `needs_review`.
+- On a rejected draft, retry ViT5 with a bounded alternate generation strategy and recompute/review metadata. ViT5 is not a chat model: do not append Gemini feedback as instructions to the source. After the graph finishes (up to two draft attempts), `persist_summary()` auto-completes the summary (`approved=True`, `processing_status=ready`) while retaining Gemini's feedback for diagnostics.
 - The review node is **not proof of factual correctness**. Never market it as independently verified news.
 - Max **two draft attempts total**, not an unbounded loop; handle structured-output validation errors and provider failures at the worker boundary.
 - Persist results from the worker *after* the graph returns, rather than allowing arbitrary LLM-initiated DB writes.
@@ -476,11 +567,11 @@ Each item shows title, source, local publish time, category, summary preview (wh
 ## 10. Local execution design
 
 - Python setup: `uv sync --locked`; use `uv run` for Python commands, migrations, pytest, and Ruff. Add dependencies through `uv add` and commit both root `pyproject.toml` and `uv.lock`.
-- Terminal 1: `docker compose up --build` for backend API + worker. The image build runs `download_summarization_model.py`; container startup loads the saved model locally.
-- Terminal 2: `cd frontend && npm install && npm run dev -- --host 127.0.0.1` for host Vite, proxying `/api` to the loopback API.
+- Full-stack Docker execution: `docker compose up -d --build` starts all three services (`frontend` via Nginx on `127.0.0.1:5173`, `api` on `127.0.0.1:8000`, and `worker` in the background). The backend image build runs `download_summarization_model.py`; container startup loads the saved model locally.
+- Optional host Vite development: `cd frontend && npm install && npm run dev -- --host 127.0.0.1` for live hot-reload against the loopback API (`127.0.0.1:8000`).
 - Supabase PostgreSQL remains hosted; Gemini is an external API. Local-only refers to application access, not a fully offline system.
 - For running Python outside Docker, first use `uv run python download_summarization_model.py` with `SUMMARIZATION_MODEL_PATH` set to a writable local directory, then reuse that path at runtime. Keep Hugging Face offline flags unset (or `0`) during this explicit download; enable them for runtime loading. Do not commit downloaded model files.
-- Nginx, domains, public hosting, TLS, and authentication/authorization are future work, outside this MVP.
+- Public domains, TLS, and authentication/authorization are future work, outside this MVP.
 
 **No CI/CD system in this MVP:** run pytest, linting, frontend build checks and container checks manually or through a documented local `make check`/shell script. Do not introduce Jenkins or GitHub Actions without request.
 
@@ -499,6 +590,7 @@ vietnamese-news-summarization/
 │   │   ├── api/
 │   │   │   ├── articles.py
 │   │   │   ├── sources.py
+│   │   │   ├── reviews.py
 │   │   │   └── ingestion_jobs.py
 │   │   ├── db/
 │   │   │   └── session.py
@@ -511,10 +603,16 @@ vietnamese-news-summarization/
 │   │   │   ├── summary.py
 │   │   │   └── ingestion_job.py
 │   │   ├── schemas.py             # Pydantic REST contracts
+│   │   ├── cli/
+│   │   │   └── ingest.py           # bounded manual collection/processing CLI
 │   │   ├── services/
 │   │   │   ├── rss_collector.py
 │   │   │   ├── article_extractor.py
-│   │   │   ├── ingestion.py
+│   │   │   ├── feed_ingestion.py
+│   │   │   ├── text_preparation.py
+│   │   │   ├── article_processing.py
+│   │   │   ├── source_guard.py
+│   │   │   ├── pipeline.py
 │   │   │   ├── job_service.py
 │   │   │   ├── gemini_service.py  # official SDK + JSON validation
 │   │   │   └── summary_service.py          # loads bundled ViT5 once; local inference
@@ -533,15 +631,18 @@ vietnamese-news-summarization/
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   ├── pages/
 │   │   ├── services/api.ts
 │   │   └── App.tsx
+│   ├── Dockerfile                # multi-stage Node build + Nginx runtime
+│   ├── nginx.conf                # SPA serving + /api/ reverse proxy
+│   ├── .dockerignore
 │   ├── package.json
-│   └── package-lock.json          # or an equivalent chosen lockfile
+│   └── package-lock.json
 ├── download_summarization_model.py # build-time model/tokenizer download
 ├── pyproject.toml                 # existing root uv project
 ├── uv.lock                        # committed dependency lockfile
-├── compose.yaml
+├── compose.yaml                   # orchestrates frontend, api, and worker
+├── .dockerignore
 ├── .env.example
 ├── .gitignore
 ├── README.md
@@ -588,9 +689,7 @@ The [14-day implementation checklist](todos.md) assigns files, dependencies, tes
 2. **Ingestion:** reviewed feeds → extraction/provenance → idempotent article persistence.
 3. **AI:** saved article → local ViT5 → Gemini metadata/review → atomic summary persistence → read API.
 4. **Jobs:** local POST → durable pending job → worker → result counters; then add the scheduler.
-5. **Reader and packaging:** React → API → saved results; shared model image, two Compose services and host Vite.
-
-The next coding milestone is Day 8: frontend setup and the reader UI. Read routes, Day 6 review/persistence and Day 7 jobs/worker/scheduling are implemented. Optional ingestion UI and tool-calling review follow core acceptance.
+5. **Reader and packaging:** React → API → saved results; shared backend model image, frontend Nginx image, and three Compose services (`frontend`, `api`, `worker`).
 
 ---
 
@@ -598,7 +697,7 @@ The next coding milestone is Day 8: frontend setup and the reader UI. Read route
 
 The [testing matrix](todos.md#testing-matrix) separates fixture/fake tests, real PostgreSQL integration, actual local model tests and opt-in live publisher/Gemini checks. The [acceptance checks](todos.md#exact-acceptance-checks) specify commands and expected results; unchecked or skipped live checks do not establish completion.
 
-Required gates: migrated schema and enforced uniqueness; three dated permitted feeds; repeat ingestion without duplicates; real ViT5/Gemini output; at most two drafts and hidden rejected summaries; durable manual/scheduled jobs and restart recovery; correct REST/UI behavior; exactly two loopback backend services; successful network-disabled model generation and deliberate missing-model failure; locked setup and reproducible README.
+Required gates: migrated schema and enforced uniqueness; three dated permitted feeds; repeat ingestion without duplicates; real ViT5/Gemini output; at most two drafts and hidden rejected summaries; durable manual/scheduled jobs and restart recovery; correct REST/UI behavior; three Compose services (`frontend`, `api`, `worker`) bound to loopback; successful network-disabled model generation and deliberate missing-model failure; locked setup and reproducible README.
 
 ---
 

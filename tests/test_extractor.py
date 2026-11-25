@@ -288,3 +288,47 @@ def test_logging_keeps_context_without_payloads(source, caplog):
     assert (record.source_id, record.article_id, record.job_id) == (7, 11, 13)
     assert record.failure_class == result.failure_reason == "access_denied"
     assert "SECRET" not in caplog.text and EXCERPT not in caplog.text and URL not in caplog.text
+
+
+def test_metadata_backfill_is_separate_from_full_text_extraction(source):
+    source = source.model_copy(update={"article_extraction_allowed": False})
+    requests = []
+
+    def handler(request):
+        requests.append(request.url.path)
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text=ROBOTS)
+        return httpx.Response(
+            200,
+            text='<meta property="og:image" content="https://cdn.example.com/lead.jpg">',
+            headers={"Content-Type": "text/html"},
+        )
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert (
+            ArticleExtractor(client, sleep=lambda _: None).fetch_image_metadata(URL, source)
+            == "https://cdn.example.com/lead.jpg"
+        )
+    assert requests == ["/robots.txt", "/news/article"]
+
+
+def test_metadata_backfill_obeys_robots(source):
+    requests = []
+
+    def handler(request):
+        requests.append(request.url.path)
+        return httpx.Response(200, text="User-agent: *\nDisallow: /\n")
+
+    with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+        assert (
+            ArticleExtractor(client, sleep=lambda _: None).fetch_image_metadata(URL, source) is None
+        )
+    assert requests == ["/robots.txt"]
+
+
+def test_extraction_carries_page_image(source):
+    markup = b'<meta property="og:image" content="https://cdn.example.com/a.jpg">' + HTML
+    result, _, _ = run_extraction(
+        source, lambda _: httpx.Response(200, content=markup, headers={"Content-Type": "text/html"})
+    )
+    assert result.usable and result.image_url == "https://cdn.example.com/a.jpg"
