@@ -24,13 +24,13 @@ export function NewsHeader({
         <a
           className="wordmark"
           href="#"
-          aria-label="Góc Việt — Trang chủ"
+          aria-label="Viet News — Trang chủ"
           onClick={() => {
             onCategory("Tất cả");
             onQuery("");
           }}
         >
-          góc<span>việt</span>
+          viet<span>news</span>
           <i>.</i>
         </a>
         <nav className="desktop-nav" aria-label="Điều hướng chính">
@@ -49,8 +49,8 @@ export function NewsHeader({
           <a href="#tin-moi" onClick={() => onCategory("Xã hội")}>
             Xã hội
           </a>
-          <a href="#ve-goc-viet">
-            Về Góc Việt <ArrowUpRight aria-hidden="true" />
+          <a href="#ve-viet-news">
+            Về Viet News <ArrowUpRight aria-hidden="true" />
           </a>
         </nav>
         <div className="header-actions">

@@ -62,7 +62,7 @@ export function ArticleReader({ article }: { article: Article }) {
           )}
         </DialogTitle>
         <DialogDescription>
-          Đọc tóm tắt tại Góc Việt hoặc nhấn vào tiêu đề để xem bài đầy đủ trên{" "}
+          Đọc tóm tắt tại Viet News hoặc nhấn vào tiêu đề để xem bài đầy đủ trên{" "}
           {article.source}.
         </DialogDescription>
       </DialogHeader>

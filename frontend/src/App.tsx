@@ -290,7 +290,7 @@ function App() {
                       </EmptyTitle>
                       <EmptyDescription>
                         Thử một từ khóa khác hoặc khám phá tất cả chuyên mục.
-                        Góc Việt vẫn còn nhiều điều để bạn đọc.
+                        Viet News vẫn còn nhiều điều để bạn đọc.
                       </EmptyDescription>
                     </EmptyHeader>
                     <EmptyContent>
@@ -306,10 +306,10 @@ function App() {
           )}
         </>
         <Separator />
-        <footer id="ve-goc-viet">
+        <footer id="ve-viet-news">
           <div>
             <a className="wordmark footer-wordmark" href="#" onClick={reset}>
-              góc<span>việt</span>
+              viet<span>news</span>
               <i>.</i>
             </a>
             <p>Đọc để hiểu. Hiểu để kết nối.</p>
