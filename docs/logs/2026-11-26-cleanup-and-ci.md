@@ -19,6 +19,4 @@ Establish consistent local and CI checks and make API, worker and CLI logs safe 
 - Frontend lockfile install, lint and build passed. npm reported an existing ESLint deprecation and dependency audit findings during installation.
 - Verified the former manual-review module and active documentation section are absent.
 
-## Follow-ups
-
-- Confirm the hosted GitHub Actions run. The checklist keeps the CI item open until it passes.
+- Hosted GitHub Actions passed both jobs. [Workflow run](https://github.com/youngazier/vietnamese-news-summarization/actions/runs/45781105293).
