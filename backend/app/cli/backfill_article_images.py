@@ -8,16 +8,17 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 import httpx
-from sqlalchemy import select, update
-from sqlalchemy.orm import Session
-
+from app.core.config import LogSettings
+from app.core.logging import configure_logging
+from app.core.source_config import SourceConfig, load_source_config
 from app.db.session import get_session_factory
 from app.models import Article, Source
-from app.seed_sources import SourceConfig, load_source_config
 from app.services.article_extractor import ArticleExtractor
 from app.services.article_images import image_url
 from app.services.rss_collector import FeedError, RSSCollector, parse_feed
 from app.services.url_normalization import normalize_url
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session
 
 
 @dataclass(frozen=True)
@@ -120,4 +121,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        configure_logging(LogSettings().LOG_LEVEL)
+        main()
+    except Exception:  # noqa: BLE001 -- keep credentials out of CLI tracebacks.
+        raise SystemExit("Command failed: check configuration and service availability") from None

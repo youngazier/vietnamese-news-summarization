@@ -41,12 +41,12 @@ Finish these MVP loose ends first so every Vision phase builds on clean imports,
 
 **Read first:** [AGENTS.md](../AGENTS.md), [decisions.md](decisions.md), [specs/backend.md](specs/backend.md), [specs/ingestion.md](specs/ingestion.md), [specs/testing.md](specs/testing.md).
 
-- [ ] Move `SourceConfig` and source config loading out of `backend/app/seed_sources.py` into `backend/app/core/source_config.py`; move `seed_sources.py` and `backfill_article_images.py` into `backend/app/cli/` and update all imports, CLI invocations, tests, and specs ([specs/backend.md](specs/backend.md), [specs/ingestion.md](specs/ingestion.md)).
-- [ ] Remove the unused `langchain-google-genai` dependency (`uv remove langchain-google-genai`) so `pyproject.toml` and `uv.lock` stay in sync.
-- [ ] Configure `[tool.ruff]` (`line-length = 100`) and `[tool.ruff.lint]` (`ignore = ["EXE002"]`) in `pyproject.toml`; fix all existing Ruff lint and format issues across `backend/` and `tests/` in a clean `style:` pass.
-- [ ] Wire `LOG_LEVEL` into Python logging (`backend/app/core/` + `main.py`, `worker.py`, `cli/*`) using a 1-line JSON structured log formatter (`ts`, `level`, `logger`, `event`, `job_id`, `source_id`, `article_id`, `latency_ms`) that never logs secrets, query tokens, or article bodies.
+- [x] Move `SourceConfig` and source config loading out of `backend/app/seed_sources.py` into `backend/app/core/source_config.py`; move `seed_sources.py` and `backfill_article_images.py` into `backend/app/cli/` and update all imports, CLI invocations, tests, and specs ([specs/backend.md](specs/backend.md), [specs/ingestion.md](specs/ingestion.md)).
+- [x] Remove the unused `langchain-google-genai` dependency (`uv remove langchain-google-genai`) so `pyproject.toml` and `uv.lock` stay in sync.
+- [x] Configure `[tool.ruff]` (`line-length = 100`) and `[tool.ruff.lint]` (`ignore = ["EXE002"]`) in `pyproject.toml`; fix all existing Ruff lint and format issues across `backend/` and `tests/` in a clean `style:` pass.
+- [x] Wire `LOG_LEVEL` into Python logging (`backend/app/core/` + `main.py`, `worker.py`, `cli/*`) using a 1-line JSON structured log formatter (`ts`, `level`, `logger`, `event`, `job_id`, `source_id`, `article_id`, `latency_ms`) that never logs secrets, query tokens, or article bodies.
 - [ ] Add `.github/workflows/ci.yml` running `uv run --locked ruff check backend tests`, `uv run --locked ruff format --check backend tests`, `uv run --locked pytest -m "not integration and not model and not live" -q`, and `npm --prefix frontend ci && npm --prefix frontend run lint && npm --prefix frontend run build`; add the CI status badge to [README.md](../README.md) and note post-MVP CI in [decisions.md](decisions.md).
-- [ ] Remove the stale `[x] Remove stale manual-review section` cleanup note once verified; write a milestone log in [logs/](logs/).
+- [x] Verify the manual-review cleanup and record local checks in the [cleanup log](logs/2026-11-26-cleanup-and-ci.md).
 
 **Done when:** `ruff check`, `ruff format --check`, unit tests, and frontend lint/build pass with zero warnings, logs emit 1-line JSON honoring `LOG_LEVEL`, and GitHub Actions is green.
 

@@ -1,6 +1,5 @@
-"""Load reviewed RSS configuration and seed sources; run from the repository root."""
+"""Validate reviewed RSS source configuration."""
 
-import argparse
 from datetime import date
 from pathlib import Path
 from typing import Literal
@@ -9,11 +8,6 @@ from urllib.parse import urlsplit
 from bs4 import BeautifulSoup
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, model_validator
 from soupsieve import SelectorSyntaxError
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import Session
-
-from app.db.session import get_session_factory
-from app.models import Source
 
 DEFAULT_SOURCE_CONFIG = Path("config/sources.json")
 
@@ -112,32 +106,3 @@ def load_source_config(path: Path = DEFAULT_SOURCE_CONFIG) -> list[SourceConfig]
     if not sources:
         raise ValueError("Source configuration must not be empty")
     return sources
-
-
-def seed_sources(session: Session, sources: list[dict[str, str | bool]]) -> None:
-    """Upsert by RSS URL; the caller owns the transaction."""
-    for source in sources:
-        statement = insert(Source).values(**source)
-        statement = statement.on_conflict_do_update(
-            index_elements=[Source.rss_url],
-            set_={
-                "name": statement.excluded.name,
-                "is_active": statement.excluded.is_active,
-            },
-        )
-        session.execute(statement)
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=DEFAULT_SOURCE_CONFIG)
-    args = parser.parse_args()
-    sources = load_source_config(args.config)
-    seeds = [source.model_dump(include={"name", "rss_url", "is_active"}) for source in sources]
-    factory = get_session_factory()
-    with factory() as session, session.begin():
-        seed_sources(session, seeds)
-
-
-if __name__ == "__main__":
-    main()

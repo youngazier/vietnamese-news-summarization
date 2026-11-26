@@ -3,8 +3,9 @@
 from datetime import UTC, datetime
 
 import pytest
+from app.cli.seed_sources import seed_sources
+from app.core.source_config import load_source_config
 from app.models import Source
-from app.seed_sources import load_source_config, seed_sources
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 

@@ -1,5 +1,7 @@
 # Vietnamese News Summarization
 
+[![CI](https://github.com/youngazier/vietnamese-news-summarization/actions/workflows/ci.yml/badge.svg)](https://github.com/youngazier/vietnamese-news-summarization/actions/workflows/ci.yml)
+
 A local, single-user Vietnamese news reader. It collects reviewed publisher RSS feeds, summarizes articles with a local ViT5 model, uses Gemini for category/keywords and review, stores everything in Supabase PostgreSQL, and shows it in a React UI.
 
 This README covers setup and running only. For how the system works, see:
@@ -75,7 +77,7 @@ uv run --locked --env-file .env python -m app.db.probe
 ```sh
 uv run --locked alembic upgrade head
 uv run --locked alembic current          # reports the latest revision (head)
-uv run --locked python -m app.seed_sources
+uv run --locked python -m app.cli.seed_sources
 ```
 
 Use the committed Alembic revisions; never reinitialize Alembic or use `create_all()`. Seeding upserts sources from `config/sources.json` by RSS URL and is safe to rerun. VnExpress and Tuổi Trẻ are active; Thanh Niên is inactive. See the [database spec](docs/specs/database.md) and [source evidence](docs/specs/source-evidence.md).

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
+from time import monotonic
 
 import httpx
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -15,10 +16,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.core.config import Settings, get_settings
+from app.core.config import LogSettings, Settings, get_settings
+from app.core.logging import LogEvent, configure_logging
+from app.core.source_config import DEFAULT_SOURCE_CONFIG, SourceConfig, load_source_config
 from app.db.session import get_engine, get_session_factory
 from app.models import Article, IngestionJob, JobTrigger, ProcessingStatus, Source
-from app.seed_sources import DEFAULT_SOURCE_CONFIG, SourceConfig, load_source_config
 from app.services.article_extractor import ArticleExtractor
 from app.services.article_processing import NewsProcessor, process_article
 from app.services.feed_ingestion import ingest_entries
@@ -31,7 +33,7 @@ from app.services.job_service import (
     recover_abandoned_work,
 )
 from app.services.pipeline import open_pipeline
-from app.services.rss_collector import FeedError, RSSCollector
+from app.services.rss_collector import FeedError, FeedParseError, RSSCollector
 from app.services.source_guard import require_active_source
 from app.services.text_preparation import prepare_pending_articles, recover_review_articles
 
@@ -41,17 +43,21 @@ logger = logging.getLogger(__name__)
 def scheduled_tick(factory: Callable[[], Session], settings: Settings, stop: Event) -> None:
     if stop.is_set():
         return
+    job_id = None
     try:
         # Each invocation owns its Session; no Session crosses a thread boundary.
         with factory() as session, session.begin():
             if not stop.is_set():
-                enqueue_job(
+                job = enqueue_job(
                     session, trigger=JobTrigger.SCHEDULED, max_backlog=settings.MAX_JOB_BACKLOG
                 )
+                job_id = job.id if job is not None else None
+        if job_id is not None:
+            logger.info(LogEvent.SCHEDULED_JOB_ENQUEUED, extra={"job_id": job_id})
     except JobSubmissionError:
-        logger.info("Scheduled tick skipped: scope unavailable or backlog full")
+        logger.info(LogEvent.SCHEDULED_TICK_SKIPPED)
     except SQLAlchemyError:
-        logger.error("Scheduled tick failed: database unavailable")
+        logger.error(LogEvent.SCHEDULED_TICK_FAILED)
 
 
 def build_scheduler(
@@ -182,8 +188,10 @@ class Worker:
 
     def run_job(self, claim: JobClaim) -> None:
         """External work happens only after the caller has committed the job claim."""
+        started = monotonic()
+        logger.info(LogEvent.JOB_CLAIMED, extra={"job_id": claim.id, "source_id": claim.source_id})
         try:
-            self._run_job(claim)
+            self._run_job(claim, started)
         except Exception:
             # Stop this worker on fatal DB/pipeline errors. Startup recovery resets
             # any processing claim; continuing could strand it indefinitely.
@@ -196,10 +204,10 @@ class Worker:
                         message="Job failed: database or pipeline error",
                     )
             except SQLAlchemyError:
-                logger.error("Could not finalize job; startup recovery is required")
+                logger.error(LogEvent.JOB_FINALIZE_FAILED, extra={"job_id": claim.id})
             raise
 
-    def _run_job(self, claim: JobClaim) -> None:
+    def _run_job(self, claim: JobClaim, started: float) -> None:
         with self.factory() as session:
             query = select(Source.id, Source.rss_url).where(Source.is_active.is_(True))
             if claim.source_id is not None:
@@ -226,7 +234,13 @@ class Worker:
                 return
             try:
                 entries = self.collector.collect(source_id, config)
-            except FeedError:
+            except FeedError as exc:
+                event = (
+                    LogEvent.FEED_PARSE_FAILED
+                    if isinstance(exc, FeedParseError)
+                    else LogEvent.FEED_FETCH_FAILED
+                )
+                logger.warning(event, extra={"job_id": claim.id, "source_id": source_id})
                 failures += 1
                 continue
             if self.stop.is_set():
@@ -251,6 +265,15 @@ class Worker:
             message = "Some source feeds failed or lacked active reviewed configuration"
         with self.factory() as session, session.begin():
             finish_job(session, claim.id, failed=not successes, message=message)
+        logger.log(
+            logging.INFO if successes else logging.ERROR,
+            LogEvent.JOB_COMPLETED if successes else LogEvent.JOB_FAILED,
+            extra={
+                "job_id": claim.id,
+                "source_id": claim.source_id,
+                "latency_ms": round((monotonic() - started) * 1000),
+            },
+        )
 
     def run_once(self) -> bool:
         if self.stop.is_set():
@@ -274,7 +297,7 @@ def serve(
     if not settings.GEMINI_API_KEY or not settings.GEMINI_MODEL.strip():
         raise ValueError("Worker requires GEMINI_API_KEY and GEMINI_MODEL")
     with open_pipeline(settings) as (graph, summarize_model_name, agent_model_name):
-        logger.info("Recovering abandoned database work")
+        logger.info(LogEvent.JOB_RECOVERY_STARTED)
         with factory() as session, session.begin():
             recover_abandoned_work(session)
         if stop.is_set():
@@ -293,7 +316,7 @@ def serve(
             )
             scheduler = build_scheduler(factory, settings, stop)
             scheduler.start()
-            logger.info("Worker ready; scheduler and job polling started")
+            logger.info(LogEvent.WORKER_READY)
             try:
                 worker.run_forever()
             finally:
@@ -305,9 +328,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=DEFAULT_SOURCE_CONFIG)
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
-    for name in ("httpx", "httpcore", "google_genai"):
-        logging.getLogger(name).setLevel(logging.WARNING)
     stop = Event()
 
     def request_stop(_signum: int, _frame: object) -> None:
@@ -316,12 +336,11 @@ def main() -> None:
     signal.signal(signal.SIGTERM, request_stop)
     signal.signal(signal.SIGINT, request_stop)
     try:
+        configure_logging(LogSettings().LOG_LEVEL)
         serve(get_session_factory(), get_settings(), load_source_config(args.config), stop)
     except Exception:  # noqa: BLE001 -- redact provider/DB credentials at the process boundary.
-        # Provider/DB exception strings can contain credentials, URLs or source text.
-        raise SystemExit(
-            "Worker stopped: check database, provider, model and source configuration"
-        ) from None
+        logger.error(LogEvent.WORKER_STOPPED)
+        raise SystemExit(1) from None
     finally:
         if get_engine.cache_info().currsize:
             get_engine().dispose()

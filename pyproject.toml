@@ -15,7 +15,6 @@ dependencies = [
     "feedparser>=6,<7",
     "google-genai>=2.29,<3",
     "httpx>=0.28.1",
-    "langchain-google-genai>=4,<5",
     "langgraph>=1,<2",
     "psycopg[binary]>=3.2,<4",
     "pydantic-settings>=2,<3",
@@ -63,3 +62,10 @@ markers = [
 [tool.alembic]
 script_location = "%(here)s/backend/alembic"
 prepend_sys_path = ["%(here)s/backend"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = ["D419", "I", "UP"]
+ignore = ["EXE002"]

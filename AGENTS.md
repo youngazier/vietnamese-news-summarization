@@ -21,10 +21,9 @@ backend/
     services/   # Pipeline stages: feed_ingestion, text_preparation, article_processing,
                 # source_guard, pipeline wiring, plus RSS, extraction, ViT5, Gemini, jobs
     agents/     # LangGraph AI workflow (graph, nodes, prompts, schemas, state)
-    cli/        # Manual command-line entrypoints (`python -m app.cli.ingest`)
+    cli/        # Ingestion, source seeding, and image backfill commands
     main.py     # FastAPI entrypoint
     schemas.py  # Shared Pydantic API schemas
-    seed_sources.py  # Seed script for news sources
     worker.py   # Background scheduler/worker entrypoint
   alembic/      # Database migration environment and revisions
   Dockerfile    # Backend API and worker container image
@@ -37,7 +36,7 @@ uv.lock         # Locked Python dependencies
 .env.example    # Configuration template without secrets
 ```
 
-Within `backend/app`, `api/` holds thin route handlers, `core/` holds settings, `db/` manages database connections, `models/` defines SQLAlchemy models, `services/` holds reusable business logic (RSS collection, article extraction, image handling, local ViT5 summarization, Gemini integration, ingestion, and job management), `agents/` implements the LangGraph AI workflow, and `cli/` holds manual command-line entrypoints. Top-level app modules include `main.py` (FastAPI app), `schemas.py` (shared API schemas), `seed_sources.py` (source seeding), and `worker.py` (APScheduler background worker).
+Within `backend/app`, `api/` holds thin route handlers, `core/` holds settings, `db/` manages database connections, `models/` defines SQLAlchemy models, `services/` holds reusable business logic (RSS collection, article extraction, image handling, local ViT5 summarization, Gemini integration, ingestion, and job management), `agents/` implements the LangGraph AI workflow, and `cli/` holds manual command-line entrypoints. Top-level app modules include `main.py` (FastAPI app), `schemas.py` (shared API schemas), and `worker.py` (APScheduler background worker).
 
 | Area | Stack | Purpose |
 | --- | --- | --- |

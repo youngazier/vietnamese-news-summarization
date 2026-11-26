@@ -3,7 +3,7 @@
 from dataclasses import replace
 
 import pytest
-from app.backfill_article_images import ImageCandidate, save_article_image
+from app.cli.backfill_article_images import ImageCandidate, save_article_image
 from app.models import Article, ProcessingStatus
 from app.services.feed_ingestion import insert_article
 from app.services.rss_collector import FeedEntry

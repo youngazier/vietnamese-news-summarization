@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 import pytest
-from app.seed_sources import SourceConfig, load_source_config
+from app.core.source_config import SourceConfig, load_source_config
 from pydantic import ValidationError
 
 ROOT = Path(__file__).resolve().parents[1]

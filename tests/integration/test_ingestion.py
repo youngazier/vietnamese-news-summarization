@@ -7,10 +7,10 @@ from threading import Barrier
 
 import httpx
 import pytest
+from app.core.source_config import ArticleExtractionPolicy, SourceConfig, load_source_config
 from app.db.session import get_db, get_engine
 from app.main import app
 from app.models import Article, ContentOrigin, ProcessingStatus, Source
-from app.seed_sources import ArticleExtractionPolicy, SourceConfig, load_source_config
 from app.services.article_extractor import ArticleExtractor
 from app.services.feed_ingestion import ingest_entries, insert_article
 from app.services.rss_collector import FeedEntry, parse_feed

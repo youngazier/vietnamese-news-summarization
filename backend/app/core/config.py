@@ -1,16 +1,22 @@
-from functools import lru_cache
+from functools import cache
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
+class LogSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
+        hide_input_in_errors=True,
     )
 
+    LOG_LEVEL: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+
+
+class Settings(LogSettings):
     API_V1_STR: str = "/api/v1"
     PROJECT_NAME: str = "Vietnamese News Summarization"
 
@@ -32,6 +38,6 @@ class Settings(BaseSettings):
     SUMMARIZATION_CPU_THREADS: int = Field(default=4, ge=1, le=32)
 
 
-@lru_cache
+@cache
 def get_settings() -> Settings:
     return Settings()

@@ -6,10 +6,10 @@ from unittest.mock import Mock
 import pytest
 from app.agents.graph import build_news_graph
 from app.agents.schemas import ArticleMetadata, ReviewResult
+from app.core.source_config import SourceConfig, load_source_config
 from app.db.session import get_db
 from app.main import app
 from app.models import Article, ContentOrigin, ProcessingStatus, Summary
-from app.seed_sources import SourceConfig, load_source_config
 from app.services.article_processing import process_article
 from app.services.gemini_service import GeminiServiceError
 from app.services.summary_persistence import persist_summary

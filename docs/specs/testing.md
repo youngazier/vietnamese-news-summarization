@@ -28,13 +28,13 @@ uv run --locked pytest -m "not integration" -q
 uv run --locked --env-file .env pytest -m integration tests/integration -q --tb=no
 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env pytest -m model tests/model -q
 uv run --locked --env-file .env pytest -m live tests/live -q
-uv run --locked ruff check --line-length 100 backend tests
-uv run --locked ruff format --check --line-length 100 backend tests
+uv run --locked ruff check backend tests
+uv run --locked ruff format --check backend tests
 npm --prefix frontend run lint
 npm --prefix frontend run build
 ```
 
-Known noise: this drive reports all files as executable, so Ruff's `EXE002` fires everywhere; ignore it with `--ignore EXE002` on changed files.
+GitHub Actions runs locked backend lint, format and unit checks and frontend lockfile install, lint and build on pushes and pull requests. PostgreSQL integration, local model and live provider tests run separately. Ruff reads the 100-character line length and the `EXE002` ignore from `pyproject.toml`.
 
 ## Coverage matrix
 
