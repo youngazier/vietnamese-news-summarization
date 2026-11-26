@@ -10,7 +10,7 @@ Living task list aligned with [vision.md](vision.md). Update it whenever a task 
 | --- | --- |
 | API, database, migrations (`0001`–`0004`) | Done |
 | RSS ingestion, dedup, text extraction, images | Done (VnExpress, Tuổi Trẻ) |
-| MVP ViT5 + Gemini LangGraph workflow | Done (auto-approval bug open → `P0.2`) |
+| MVP ViT5 + Gemini LangGraph workflow | Review publication gate restored |
 | Jobs, worker, scheduler, startup recovery | Done |
 | Ingestion refactor (5 phases) | Done, merged 2026-11-25 |
 | Reader UI (feed, client filter/search, detail dialog) | MVP mostly done; full routing/search in `P4.3` |
@@ -58,11 +58,11 @@ Finish these MVP loose ends first so every Vision phase builds on clean imports,
 
 **Read first:** [AGENTS.md](../AGENTS.md), [decisions.md](decisions.md), [specs/summarization.md](specs/summarization.md), [specs/database.md](specs/database.md), [logs/2026-11-07-auto-approve-summaries.md](logs/2026-11-07-auto-approve-summaries.md).
 
-- [ ] Update `backend/app/services/summary_persistence.py` and `backend/app/services/article_processing.py` so `approved=True` and article status `ready` are set **only** when the graph outcome is `approved`.
-- [ ] Route rejected outcomes (after max drafts) to `approved=False` and article status `needs_review` (hidden from `/api/v1/articles`), incrementing `ingestion_jobs.articles_needs_review`.
-- [ ] Record in [decisions.md](decisions.md) that rejected summaries stay hidden (`needs_review`) and that the unused `human_review_*` columns on `summaries` will be dropped in `P2.2`'s migration.
-- [ ] Update unit and PostgreSQL integration persistence tests (`uv run --locked --env-file .env pytest -m integration tests/integration -q --tb=no`).
-- [ ] Update [specs/summarization.md](specs/summarization.md) and write a milestone log in [logs/](logs/).
+- [x] Update `backend/app/services/summary_persistence.py` and `backend/app/services/article_processing.py` so `approved=True` and article status `ready` are set **only** when the graph outcome is `approved`.
+- [x] Route rejected outcomes (after max drafts) to `approved=False` and article status `needs_review` (hidden from `/api/v1/articles`), incrementing `ingestion_jobs.articles_needs_review`.
+- [x] Record in [decisions.md](decisions.md) that rejected summaries stay hidden (`needs_review`) and that the unused `human_review_*` columns on `summaries` will be dropped in `P2.2`'s migration.
+- [x] Update unit and PostgreSQL integration persistence tests (`uv run --locked --env-file .env pytest -m integration tests/integration -q --tb=no`).
+- [x] Update [specs/summarization.md](specs/summarization.md) and write a milestone log in [logs/](logs/).
 
 **Done when:** A rejected summary is never returned by `/api/v1/articles`, `articles_needs_review` increments accurately, and unit + integration tests prove it.
 
@@ -335,7 +335,7 @@ Close the user feedback loop safely under personal/invite-only terms and package
 - [x] Alembic schema reachable from API and worker; repeated ingestion makes no duplicates.
 - [x] Real ViT5 generates Vietnamese summaries; real Gemini supplies metadata/review.
 - [x] Graph stops after bounded attempts.
-- [ ] Rejected summaries are never shown as approved (`P0.2`).
+- [x] Newly rejected summaries are hidden from the article API (`P0.2`).
 - [x] Manual `202` + polling and 30-minute scheduling; crash recovery keeps committed results.
 - [ ] Compose offline `--network none` model smoke and mid-job restart smoke verified (`P0.3`).
 - [x] Lockfiles, Ruff lint/format, and CI quality gate pass (`P0.1`).
