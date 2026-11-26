@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:0.12.15-python3.12-bookworm-slim
+FROM ghcr.io/astral-sh/uv:0.12.15-python3.12-trixie-slim
 
 WORKDIR /app
 
@@ -24,6 +24,7 @@ RUN PYTHONPATH=backend uv run --no-sync python download_summarization_model.py
 # Copy application source and install project
 COPY README.md ./
 COPY backend/ ./backend/
+COPY config/ ./config/
 RUN uv sync --locked --no-dev --no-editable
 
 # Enforce offline flags at runtime
