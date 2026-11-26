@@ -12,7 +12,7 @@ Local-only, single user. Supabase and Gemini are external; there is no database 
 | `api` | `vietnam-news-backend:local` | `uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000` | `127.0.0.1:8000:8000` |
 | `worker` | `vietnam-news-backend:local` (same image) | `uv run --no-sync python -m app.worker` | none |
 
-- `api` and `worker` share one image and code; only the entrypoint differs.
+- `api` and `worker` share a Python 3.12 Debian Trixie image. The worker reads `/app/config/sources.json`, which is copied into the image.
 - All published ports bind to loopback. `env_file: .env` supplies runtime config.
 - See [compose.yaml](../../compose.yaml), [backend/Dockerfile](../../backend/Dockerfile), [frontend/Dockerfile](../../frontend/Dockerfile), [frontend/nginx.conf](../../frontend/nginx.conf).
 

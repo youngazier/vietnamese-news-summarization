@@ -14,7 +14,7 @@ Living task list aligned with [vision.md](vision.md). Update it whenever a task 
 | Jobs, worker, scheduler, startup recovery | Done |
 | Ingestion refactor (5 phases) | Done, merged 2026-11-25 |
 | Reader UI (feed, client filter/search, detail dialog) | MVP mostly done; full routing/search in `P4.3` |
-| Docker (`frontend`, `api`, `worker`) | Built; runtime smoke checks open → `P0.3` |
+| Docker (`frontend`, `api`, `worker`) | Offline, model isolation and restart checks passed. Live job completion blocked by Gemini HTTP 503 → `P0.3` |
 | Post-MVP vision ([vision.md](vision.md)) | Drafted 2026-11-26; execution starts at `P0.1` |
 | Third source (Thanh Niên) | Blocked on reuse terms |
 
@@ -74,12 +74,12 @@ Finish these MVP loose ends first so every Vision phase builds on clean imports,
 
 **Read first:** [AGENTS.md](../AGENTS.md), [specs/deployment.md](specs/deployment.md), [specs/backend.md](specs/backend.md), [specs/testing.md](specs/testing.md), [compose.yaml](../compose.yaml).
 
-- [ ] Run the `--network none` offline ViT5 smoke test inside `vietnam-news-backend:local` and confirm a missing `SUMMARIZATION_MODEL_PATH` fails fast with a nonzero exit code without attempting network downloads.
-- [ ] Confirm the `api` container never imports or loads ViT5 into memory while `worker` preloads it once at startup.
-- [ ] Start the full stack via `docker compose up -d`, submit a job via `POST /api/v1/ingestion-jobs`, follow it to completion, and verify structured worker logs, job counters, and reader UI rendering.
-- [ ] Verify failure/restart resilience: restart `worker` mid-job (abandoned `running` job marked `failed` on startup, `pending` articles resumed next job); stop `api` while `worker` runs (scheduling and processing continue); observe one real 30-minute scheduled cycle with no overlap.
-- [ ] Simulate RSS timeout / malformed feed / single-source failure and confirm healthy sources still complete; inspect logs to verify zero leaked credentials, full publisher URLs from HTTPX exceptions, or raw article text.
-- [ ] Rehearse setup instructions from [README.md](../README.md) and record runtime versions, baseline worker RAM/CPU latency, and smoke results in [logs/](logs/).
+- [x] Run the `--network none` offline ViT5 smoke test inside `vietnam-news-backend:local` and confirm a missing `SUMMARIZATION_MODEL_PATH` fails fast with a nonzero exit code without attempting network downloads.
+- [x] Confirm the `api` container never imports or loads ViT5 into memory while `worker` preloads it once at startup.
+- [ ] Start the full stack via `docker compose up -d`, submit a job via `POST /api/v1/ingestion-jobs`, follow it to completion, and verify structured worker logs, job counters, and reader UI rendering. The live job returned 202 and the UI and counters were verified. Completion remains blocked by Gemini HTTP 503.
+- [ ] Verify failure/restart resilience: restart `worker` mid-job (abandoned `running` job marked `failed` on startup, `pending` articles resumed next job); stop `api` while `worker` runs (scheduling and processing continue); observe one real 30-minute scheduled cycle with no overlap. Mid-job recovery and the real 30-minute enqueue behind the active job passed with the API stopped. Scheduled execution through completion remains open.
+- [x] Simulate RSS timeout / malformed feed / single-source failure and confirm healthy sources still complete; inspect logs to verify zero leaked credentials, full publisher URLs from HTTPX exceptions, or raw article text.
+- [x] Rehearse setup instructions from [README.md](../README.md) and record runtime versions, baseline worker RAM/CPU latency, and smoke results in the [runtime log](logs/2026-11-26-mvp-runtime-verification.md).
 
 **Done when:** Offline model checks, full Compose stack execution, and crash-recovery checks are verified and logged.
 
@@ -337,6 +337,6 @@ Close the user feedback loop safely under personal/invite-only terms and package
 - [x] Graph stops after bounded attempts.
 - [ ] Rejected summaries are never shown as approved (`P0.2`).
 - [x] Manual `202` + polling and 30-minute scheduling; crash recovery keeps committed results.
-- [ ] Compose offline `--network none` model smoke and mid-job restart smoke verified (`P0.3`).
+- [x] Compose offline `--network none` model smoke and mid-job restart smoke verified (`P0.3`).
 - [ ] Lockfiles, Ruff lint/format, and CI quality gate pass (`P0.1`).
 - [ ] End-to-end search/filter/detail reader UI and reproducible README setup/demo complete (`P4.3`, `P5.3`).
