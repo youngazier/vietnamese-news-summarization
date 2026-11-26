@@ -100,16 +100,19 @@ def test_pipeline_atomic_provenance_rest_visibility_and_replay(
         for approved in approvals
     ]
     graph = build_news_graph(*adapters)
+    approved = approvals[-1]
     assert run(pipeline, graph) is True
     assert run(pipeline, graph) is False
     assert adapters[0].summarize.call_count == len(approvals)
     with factory() as session:
         article = session.get(Article, article_id)
         summary = session.scalar(select(Summary).where(Summary.article_id == article_id))
-        assert article.processing_status == "ready"
+        assert article.processing_status == ("ready" if approved else "needs_review")
         assert article.content == SMOKE_TEXT and article.content_origin == "rss_excerpt"
-        assert article.processing_error is None
-        assert summary.approved is True
+        assert article.processing_error == (
+            None if approved else "Summary rejected by automated review"
+        )
+        assert summary.approved is approved
         assert summary.draft_attempts == len(approvals)
         assert summary.review_feedback == ("Được hỗ trợ" if approvals[-1] else "Sai số liệu")
         assert summary.input_truncated is True
@@ -118,16 +121,20 @@ def test_pipeline_atomic_provenance_rest_visibility_and_replay(
         assert summary.keywords == ["thư viện", "kỹ năng số", "học miễn phí"]
         assert session.scalar(select(func.count()).select_from(Summary)) == 1
     detail = client.get(f"/api/v1/articles/{article_id}")
-    assert detail.status_code == 200
-    data = detail.json()
-    assert data["ai_generated"] is True
-    assert data["summary"] is not None
-    assert data["category"] is not None
-    card = client.get("/api/v1/articles").json()["items"][0]
-    assert card["summary_preview"] is not None
+    page = client.get("/api/v1/articles").json()
     filtered = client.get("/api/v1/articles", params={"category": "society"}).json()
-    assert filtered["total"] == 1
-    assert "review_feedback" not in detail.text and "source_text" not in detail.text
+    assert page["total"] == filtered["total"] == int(approved)
+    if approved:
+        assert detail.status_code == 200
+        data = detail.json()
+        assert data["ai_generated"] is True
+        assert data["summary"] is not None
+        assert data["category"] is not None
+        assert page["items"][0]["summary_preview"] is not None
+        assert "review_feedback" not in detail.text and "source_text" not in detail.text
+    else:
+        assert detail.status_code == 404
+        assert page["items"] == filtered["items"] == []
 
 
 @pytest.mark.parametrize("operation", ["summarize", "metadata", "review"])

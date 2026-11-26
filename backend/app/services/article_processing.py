@@ -31,7 +31,8 @@ def process_article(
 ) -> bool:
     """Claim one eligible pending article; run inference without an open transaction.
 
-    Returns True only for a new terminal transition. Provider/model/schema failures
+    Returns True for a new terminal transition, including an exhausted review.
+    The validated graph outcome controls publication. Provider/model/schema failures
     become failed articles with a fixed error. Database failures propagate so the
     caller can stop the cycle; the committed processing claim remains recoverable.
     """

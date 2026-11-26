@@ -40,8 +40,8 @@ Defined in `backend/app/models/enums.py` and stored as VARCHAR with named check 
 
 - **Deduplication:** `articles.canonical_url` is unique; inserts use `ON CONFLICT DO NOTHING RETURNING id`. Never rely on in-memory sets.
 - **Counters:** nonnegative, and `articles_processed = summarized + failed + needs_review`.
-- **Visibility:** a summary is shown only when the article is `ready` **and** the summary is `approved`. Both are written in one transaction; the read API suppresses anything inconsistent.
-- **Human review columns** (revision `0004`): a check requires `accept` ⇒ approved and `decline` ⇒ not approved with a note. The manual-review UI/API was removed on 2026-11-07; the columns remain but are currently unused.
+- **Visibility:** a summary is shown only when the article is `ready` **and** the summary is `approved`. Graph approval writes both fields in one transaction. Rejection writes an unapproved draft, `needs_review` status and the job counter together. The API excludes these rejected articles.
+- **Human review columns** (revision `0004`): a check requires `accept` ⇒ approved and `decline` ⇒ not approved with a note. The manual-review UI/API was removed on 2026-11-07; the unused columns are scheduled for removal in P2.2.
 - **Ordering:** newest first by `COALESCE(published_at, created_at) DESC, id DESC`.
 - **Deletion:** sources are deactivated, not deleted (FK restricted). Deleting an article cascades to its summary. No delete endpoints exist.
 - **Defaults** are database-side (applied on INSERT). `updated_at` uses `onupdate=func.now()`; raw SQL updates must set it explicitly.

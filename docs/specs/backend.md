@@ -45,6 +45,7 @@ No auth; local loopback only. Timestamps are ISO 8601 UTC.
 **Behavior:**
 
 - Filters combine with AND. `q` searches titles with parameterized `ILIKE` (wildcards escaped). The count uses the same filters. Out-of-range pages return empty items with the true total.
+- Articles with a persisted rejected draft in `needs_review` are omitted from list results and totals, and return 404 on detail reads.
 - Summary, category, keywords and preview (≤ 240 chars) appear **only** for `ready` articles with an approved summary (`_is_visible` in `api/articles.py`). Raw content, RSS HTML and prompts are never returned. `ai_generated` is true only when a summary is shown.
 - Errors: unknown source on POST → 404; inactive/no active sources → 422; backlog full (`MAX_JOB_BACKLOG`, default 5) → 429; DB unavailable → redacted 503. App errors use `detail: {code, message}`.
 
