@@ -2,8 +2,7 @@
 
 # 12/10
 
-`@lru_cache`
-Example:
+`@lru_cache` Example:
 ```python
 from functools import lru_cache
 
@@ -14,8 +13,7 @@ def get_engine() -> Engine
 
 ---
 
-`factory`
-Example:
+`factory` Example:
 ```python
 @lru_cache
 def get_session_factory() -> sessionmaker[Session]:

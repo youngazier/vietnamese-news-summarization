@@ -75,13 +75,7 @@ D3.2 stores all three reviews in `config/sources.json`. `app.seed_sources` valid
 
 On 2026-10-14, the permitted live D3 check collected VnExpress only: 51 usable feed entries were parsed, 20 were inserted under the configured cap, replaying the same attempted entries inserted zero rows, and the stored pending article was returned through REST. This verifies the implemented feed path; it does not grant extraction or AI-processing permission and does not clear Thanh Niên.
 
-On 2026-10-15, the Day 4 RSS-only adequacy check fetched the two active feeds:
-VnExpress returned 51 usable entries (2 excerpts at least 200 cleaned characters),
-and Tuổi Trẻ returned 50 (6 at least 200). No publisher article pages or AI services
-were called. Existing VnExpress development rows were labeled from stored RSS
-excerpts with `rss_excerpt` provenance: 1 pending, 19 needs review. Repeating
-preparation changed zero rows. Article extraction and AI flags remain disabled;
-these observations do not change permission decisions. See [Day 4 details](day-4-extraction.md).
+On 2026-10-15, the Day 4 RSS-only adequacy check fetched the two active feeds: VnExpress returned 51 usable entries (2 excerpts at least 200 cleaned characters), and Tuổi Trẻ returned 50 (6 at least 200). No publisher article pages or AI services were called. Existing VnExpress development rows were labeled from stored RSS excerpts with `rss_excerpt` provenance: 1 pending, 19 needs review. Repeating preparation changed zero rows. Article extraction and AI flags remain disabled; these observations do not change permission decisions. See [Day 4 details](../logs/2026-10-15-day-4-text-extraction.md).
 
 ## Reproduce availability checks
 
@@ -122,22 +116,11 @@ This manual diagnostic follows redirects using urllib and remains useful for evi
 
 ## Day 6 user-authorized acceptance exception — 2026-10-15
 
-After selecting VnExpress's World feed, the user explicitly authorized one linked
-public article's full text for local ViT5 and Gemini review. The feed's official
-link and robots access were verified; 60 RSS excerpts were all below the existing
-200-character adequacy threshold. The one-off extraction policy was restricted to
-[the selected article](https://vnexpress.net/sap-mai-truong-hoc-tai-pakistan-it-nhat-35-nguoi-chet-5132860.html)
-and its public content container.
+After selecting VnExpress's World feed, the user explicitly authorized one linked public article's full text for local ViT5 and Gemini review. The feed's official link and robots access were verified; 60 RSS excerpts were all below the existing 200-character adequacy threshold. The one-off extraction policy was restricted to [the selected article](https://vnexpress.net/sap-mai-truong-hoc-tai-pakistan-it-nhat-35-nguoi-chet-5132860.html) and its public content container.
 
-The real result is stored as source 4 / article 41, approved and visible through
-REST after a controlled manual retry for an intermittent provider failure. The
-previous rejected RSS candidate, article 5, stays hidden. See the [Day 6 evidence](day-6-review.md)
-for source fidelity, bounds, failure/retry history and HTTP verification.
+The real result is stored as source 4 / article 41, approved and visible through REST after a controlled manual retry for an intermittent provider failure. The previous rejected RSS candidate, article 5, stays hidden. See the [Day 6 evidence](../logs/2026-10-15-day-6-review-persistence.md) for source fidelity, bounds, failure/retry history and HTTP verification.
 
-This records the user's one-off test authorization, not new publisher permission
-for ongoing full-article extraction, Gemini processing or generated-summary
-redistribution. The committed source configuration and unresolved policy gates
-above are unchanged.
+This records the user's one-off test authorization, not new publisher permission for ongoing full-article extraction, Gemini processing or generated-summary redistribution. The committed source configuration and unresolved policy gates above are unchanged.
 
 ## Update — Personal daily reader auto-summarization enabled (2026-11-07)
 
