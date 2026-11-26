@@ -27,7 +27,7 @@ A skipped or fake-only result is **not** proof of live behavior. Report skipped 
 uv run --locked pytest -m "not integration" -q
 uv run --locked --env-file .env pytest -m integration tests/integration -q --tb=no
 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env pytest -m model tests/model -q
-uv run --locked --env-file .env pytest -m live tests/live -q
+uv run --locked --env-file .env pytest -m live tests/live -q --tb=no
 uv run --locked ruff check backend tests
 uv run --locked ruff format --check backend tests
 npm --prefix frontend run lint

@@ -16,6 +16,7 @@ One file per milestone, named `YYYY-MM-DD-short-topic.md` (date the milestone fi
 | 2026-11-25 | [Ingestion refactor](2026-11-25-refactor-ingestion.md) |
 | 2026-11-26 | [Cleanup and CI](2026-11-26-cleanup-and-ci.md) |
 | 2026-11-26 | [Review publication gate](2026-11-26-review-gate.md) |
+| 2026-11-26 | [MVP runtime verification](2026-11-26-mvp-runtime-verification.md) |
 
 ## Template
 
