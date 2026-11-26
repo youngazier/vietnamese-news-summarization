@@ -13,7 +13,7 @@ Run all commands from the repository root unless stated otherwise. Settings load
 ## 1. Prerequisites
 
 - Git and [uv](https://docs.astral.sh/uv/getting-started/installation/) (uv installs Python 3.12)
-- Node.js 20 LTS and npm (frontend)
+- Node.js 22 and npm (frontend)
 - Docker with Compose (optional, for the container workflow)
 - A [Supabase](https://supabase.com/dashboard) project and a [Gemini API key](https://aistudio.google.com/apikey)
 

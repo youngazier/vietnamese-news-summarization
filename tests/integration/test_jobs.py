@@ -321,20 +321,45 @@ def test_total_feed_failure_keeps_committed_results_and_redacts(pipeline):
     assert worker.collector.collect.call_count == 1
 
 
-def test_partial_feed_failure_is_completed(pipeline):
+@pytest.mark.parametrize("failure", ["timeout", "malformed"])
+def test_partial_feed_failure_is_completed(pipeline, failure):
     worker, _, _, config = pipeline
     with worker.factory() as session, session.begin():
         other = Source(
             name="Other fixture", rss_url="https://example.com/other.xml", is_active=True
         )
         session.add(other)
+        session.flush()
+        healthy_id = other.id
+        failed_id = session.scalar(select(Source.id).where(Source.rss_url == config.rss_url))
     worker.configs[other.rss_url] = config.model_copy(update={"rss_url": other.rss_url})
-    worker.collector.collect.side_effect = [FeedFetchError("private URL"), []]
-    job_id = enqueue(worker)
-    worker.run_once()
+
+    failed_requests = 0
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        nonlocal failed_requests
+        if request.url.path == "/other.xml":
+            return httpx.Response(
+                200, content=b'<rss version="2.0"><channel><title>Healthy</title></channel></rss>'
+            )
+        failed_requests += 1
+        if failure == "timeout":
+            raise httpx.ReadTimeout(
+                "https://example.com/feed?token=fixture-secret", request=request
+            )
+        return httpx.Response(200, content=b"<rss><channel><title>Malformed")
+
+    with httpx.Client(transport=httpx.MockTransport(respond)) as client:
+        worker.collector = RSSCollector(client, sleep=lambda _: None)
+        job_id = enqueue(worker)
+        assert worker.run_once()
     job = read_job(worker, job_id)
     assert job.status == JobStatus.COMPLETED
     assert job.error_message == "Some source feeds failed or lacked active reviewed configuration"
+    assert failed_requests == (3 if failure == "timeout" else 1)
+    with worker.factory() as session:
+        assert session.get(Source, healthy_id).last_fetched_at is not None
+        assert session.get(Source, failed_id).last_fetched_at is None
 
 
 def test_isolated_article_failure_preserves_other_results_without_worker_retry(pipeline):

@@ -8,7 +8,7 @@ Local-only, single user. Supabase and Gemini are external; there is no database 
 
 | Service | Image | Command | Ports |
 | --- | --- | --- | --- |
-| `frontend` | `vietnam-news-frontend:local` (Node 20 build → `nginx:alpine`) | Nginx serves the SPA and proxies `/api/` to `api:8000` | `127.0.0.1:5173:80` |
+| `frontend` | `vietnam-news-frontend:local` (Node 22 build → `nginx:alpine`) | Nginx serves the SPA and proxies `/api/` to `api:8000` | `127.0.0.1:5173:80` |
 | `api` | `vietnam-news-backend:local` | `uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000` | `127.0.0.1:8000:8000` |
 | `worker` | `vietnam-news-backend:local` (same image) | `uv run --no-sync python -m app.worker` | none |
 
