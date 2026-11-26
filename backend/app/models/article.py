@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import BigInteger, DateTime, ForeignKey, Identity, Text, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -37,6 +38,9 @@ class Article(Base):
         string_enum(ProcessingStatus, name="processing_status"),
         nullable=False,
         server_default=ProcessingStatus.PENDING.value,
+    )
+    publisher_meta: Mapped[dict[str, list[str]] | None] = mapped_column(
+        JSONB(none_as_null=True), nullable=True
     )
     processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(

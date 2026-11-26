@@ -28,7 +28,7 @@ def pipeline(migrated_database, db_session, api_article):
     with db_session.begin():
         api_article.title = SMOKE_TITLE
         api_article.content = SMOKE_TEXT
-        api_article.content_origin = ContentOrigin.RSS_EXCERPT
+        api_article.content_origin = ContentOrigin.EXTRACTED
     config = SourceConfig.model_validate(
         load_source_config()[0].model_dump()
         | {
@@ -108,7 +108,7 @@ def test_pipeline_atomic_provenance_rest_visibility_and_replay(
         article = session.get(Article, article_id)
         summary = session.scalar(select(Summary).where(Summary.article_id == article_id))
         assert article.processing_status == ("ready" if approved else "needs_review")
-        assert article.content == SMOKE_TEXT and article.content_origin == "rss_excerpt"
+        assert article.content == SMOKE_TEXT and article.content_origin == "extracted"
         assert article.processing_error == (
             None if approved else "Summary rejected by automated review"
         )
@@ -162,7 +162,7 @@ def candidate(pipeline, adapters):
             "article_id": article_id,
             "title": SMOKE_TITLE,
             "source_text": SMOKE_TEXT,
-            "content_origin": ContentOrigin.RSS_EXCERPT,
+            "content_origin": ContentOrigin.EXTRACTED,
         }
     )
     with factory() as session, session.begin():
@@ -218,7 +218,7 @@ def test_unique_summary_enforced_and_failed_write_rolls_back(pipeline, candidate
         {"input_truncated": "false"},
         {"source_text": "Different source"},
         {"title": "Different title"},
-        {"content_origin": "extracted"},
+        {"content_origin": "rss_excerpt"},
     ],
 )
 def test_invalid_or_stale_output_never_writes(pipeline, candidate, change):
@@ -261,3 +261,17 @@ def test_inadequate_text_is_not_sent_to_models(pipeline, text):
     graph.invoke.assert_not_called()
     with factory() as session:
         assert session.get(Article, article_id).processing_status == ProcessingStatus.NEEDS_REVIEW
+
+
+def test_pending_legacy_rss_excerpt_is_rejected_before_graph(pipeline):
+    factory, article_id, _ = pipeline
+    with factory() as session, session.begin():
+        session.get(Article, article_id).content_origin = ContentOrigin.RSS_EXCERPT
+    graph = Mock()
+    assert run(pipeline, graph) is True
+    assert run(pipeline, graph) is False
+    graph.invoke.assert_not_called()
+    with factory() as session:
+        article = session.get(Article, article_id)
+        assert article.processing_status == ProcessingStatus.NEEDS_REVIEW
+        assert article.processing_error == "rss_excerpt_only"

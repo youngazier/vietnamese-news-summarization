@@ -32,7 +32,7 @@ from app.services.job_service import (
 )
 from app.services.rss_collector import FeedEntry, FeedFetchError, RSSCollector
 from app.services.summary_persistence import persist_summary
-from app.services.summary_service import SMOKE_TEXT
+from app.services.summary_service import SMOKE_TEXT, SMOKE_TITLE
 from app.worker import Worker, scheduled_tick
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select, text
@@ -45,7 +45,7 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 def pipeline(migrated_database, db_session, api_article):
     with db_session.begin():
-        api_article.rss_description = SMOKE_TEXT
+        api_article.title = SMOKE_TITLE
     config = SourceConfig.model_validate(
         load_source_config()[0].model_dump()
         | {
@@ -53,8 +53,12 @@ def pipeline(migrated_database, db_session, api_article):
             "official_rss_url": "https://example.com/rss",
             "robots_url": "https://example.com/robots.txt",
             "allowed_hosts": ["example.com"],
-            "article_extraction_allowed": False,
-            "article_extraction": None,
+            "article_extraction_allowed": True,
+            "article_extraction": {
+                "public_path_prefixes": ["/"],
+                "content_selector": "article",
+                "review_note": "Authored fixture text.",
+            },
             "ai_processing_allowed": True,
             "ai_processing_review_note": "Authored fixture text.",
         }
@@ -79,17 +83,24 @@ def pipeline(migrated_database, db_session, api_article):
     graph.invoke.side_effect = invoke
     collector = Mock()
     collector.collect.return_value = []
-    client = httpx.Client(
-        transport=httpx.MockTransport(
-            lambda request: pytest.fail("Fixture extraction must use RSS only")
+
+    def serve_fixture(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nAllow: /")
+        body = "short" if request.url.path == "/short" else SMOKE_TEXT
+        return httpx.Response(
+            200,
+            text=f"<article><p>{body}</p></article>",
+            headers={"Content-Type": "text/html; charset=utf-8"},
         )
-    )
+
+    client = httpx.Client(transport=httpx.MockTransport(serve_fixture))
     worker = Worker(
         factory,
         Settings(_env_file=None),
         [config],
         collector,
-        ArticleExtractor(client),
+        ArticleExtractor(client, sleep=lambda _: None),
         graph,
         summarize_model_name="fixture/vit5",
         agent_model_name="fixture/gemini",
@@ -365,7 +376,7 @@ def test_partial_feed_failure_is_completed(pipeline, failure):
 def test_isolated_article_failure_preserves_other_results_without_worker_retry(pipeline):
     worker, _, source_id, _ = pipeline
     worker.collector.collect.return_value = [
-        FeedEntry(source_id, "Next", "https://example.com/next", None, SMOKE_TEXT)
+        FeedEntry(source_id, "Next", "https://example.com/next", None, None)
     ]
     invoke = worker.graph.invoke.side_effect
     calls = 0
@@ -410,14 +421,14 @@ def test_result_counter_and_summary_roll_back_together_and_replay_is_safe(pipeli
         claim_job(session)
         article = session.get(Article, article_id)
         article.processing_status = ProcessingStatus.PROCESSING
-        article.content, article.content_origin = SMOKE_TEXT, ContentOrigin.RSS_EXCERPT
+        article.content, article.content_origin = SMOKE_TEXT, ContentOrigin.EXTRACTED
         title = article.title
     result = worker.graph.invoke(
         {
             "article_id": article_id,
             "title": title,
             "source_text": SMOKE_TEXT,
-            "content_origin": ContentOrigin.RSS_EXCERPT,
+            "content_origin": ContentOrigin.EXTRACTED,
         }
     )
     result.update(approved=approved, outcome="approved" if approved else "needs_review")
@@ -458,7 +469,8 @@ def test_insertion_counter_rolls_back_with_article(pipeline):
 def test_short_text_counts_once_without_ai(pipeline):
     worker, article_id, _, config = pipeline
     with worker.factory() as session, session.begin():
-        session.get(Article, article_id).rss_description = "short"
+        session.get(Article, article_id).content_origin = ContentOrigin.RSS_EXCERPT
+        session.get(Article, article_id).content = "short"
     job_id = enqueue(worker)
     worker.run_once()
     assert read_job(worker, job_id).articles_needs_review == 1
@@ -486,7 +498,7 @@ def test_oldest_prepared_backlog_is_not_starved_by_short_new_text(pipeline):
     worker.settings.JOB_MAX_ARTICLE_RESULTS = 1
     with worker.factory() as session, session.begin():
         article = session.get(Article, article_id)
-        article.content, article.content_origin = SMOKE_TEXT, ContentOrigin.RSS_EXCERPT
+        article.content, article.content_origin = SMOKE_TEXT, ContentOrigin.EXTRACTED
         session.add(
             Article(
                 source_id=source_id,
@@ -513,7 +525,7 @@ def test_restart_preserves_results_and_counters_and_next_job_resumes(pipeline):
             original_url="https://example.com/orphan",
             canonical_url="https://example.com/orphan",
             content=SMOKE_TEXT,
-            content_origin=ContentOrigin.RSS_EXCERPT,
+            content_origin=ContentOrigin.EXTRACTED,
             processing_status=ProcessingStatus.PROCESSING,
         )
         session.add(orphan)

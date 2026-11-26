@@ -70,7 +70,7 @@ Review checks names, dates, numbers, quotes and critical claims against the supp
 
 ## Processing and persistence
 
-- `services/article_processing.py` (`process_article`, `NewsProcessor`) checks source AI permission, claims one pending article in a short committed transaction, then runs the graph outside any transaction. Inadequate text goes to `needs_review` without inference.
+- `services/article_processing.py` (`process_article`, `NewsProcessor`) checks source AI permission, claims one pending article in a short committed transaction, then runs the graph outside any transaction. The deterministic [extraction gate](ingestion.md#text-quality-contract) moves rejected text and RSS-only rows to `needs_review` without inference.
 - `services/summary_persistence.py` (`persist_summary`) locks the article, checks the source text is unchanged, and writes summary + article status + job counter in **one transaction**.
 - The validated graph outcome determines publication. Approved drafts are saved as `approved=True` with article status `ready`. Exhausted reviews persist the final draft and review feedback with `approved=False`, set the article to `needs_review`, and increment the job’s needs-review counter. Rejected articles are excluded from the list and return 404 on detail reads.
 - Previously auto-approved rows retain their stored state because the previous persistence code discarded the review outcome and free-form feedback cannot reliably reconstruct it.

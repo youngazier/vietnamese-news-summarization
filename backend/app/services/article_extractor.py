@@ -12,7 +12,8 @@ import httpx
 from app.core.logging import LogEvent
 from app.core.source_config import SourceConfig
 from app.models import ContentOrigin
-from app.services.article_images import image_from_html
+from app.services.article_images import image_from_document, image_from_html
+from app.services.article_quality import MAX_TEXT_CHARACTERS, is_media_url, quality_reasons
 from app.services.rss_collector import (
     HTTP_TIMEOUT_SECONDS,
     MAX_HTTP_ATTEMPTS,
@@ -24,17 +25,26 @@ from app.services.rss_collector import (
     retry_delay,
     validate_source_url,
 )
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString, Tag
 
 MAX_HTML_BYTES = 2 * 1024 * 1024
 MAX_ROBOTS_BYTES = 256 * 1024
-MAX_TEXT_CHARACTERS = 20_000
-MIN_TEXT_CHARACTERS = 200
 NOISE_SELECTOR = (
     "script, style, noscript, nav, header, footer, aside, form, iframe, svg, "
     "[hidden], [aria-hidden='true'], .advertisement, .ads, .related, .related-news, "
-    ".comments, .social-share, .author"
+    "figure, figcaption, .box-tinlienquan, .box-related, .box-tinkhac, "
+    ".related-articles, .detail__related, .box-category, .box-comment, .comment, "
+    ".comments, .social-share, .social, .share, .detail__share, .detail__comment, .author"
 )
+PUBLISHER_META = {
+    "article:section",
+    "its_subsection",
+    "news_keywords",
+    "article:tag",
+    "its_tag",
+    "its_type",
+    "its_wordcount",
+}
 logger = logging.getLogger(__name__)
 
 
@@ -45,6 +55,7 @@ class ExtractionResult:
     usable: bool
     failure_reason: str | None = None
     image_url: str | None = None
+    publisher_meta: dict[str, list[str]] | None = None
 
 
 class ExtractionError(Exception):
@@ -54,14 +65,56 @@ class ExtractionError(Exception):
 def clean_text(markup: str | bytes, *, selector: str | None = None) -> str:
     """Use the reviewed container; never fall back to the entire page."""
     soup = BeautifulSoup(markup, "html.parser")
-    for element in soup.select(NOISE_SELECTOR):
-        element.decompose()
     container = soup.select_one(selector) if selector else soup
-    if container is None:
+    return _body_text(container) if container is not None else ""
+
+
+class _ParagraphBreak(NavigableString):
+    pass
+
+
+def _body_text(container: Tag) -> str:
+    if container.css.match(NOISE_SELECTOR) or any(
+        parent.css.match(NOISE_SELECTOR) for parent in container.parents
+    ):
         return ""
-    return " ".join(container.get_text(separator=" ").replace("\x00", "").split())[
-        :MAX_TEXT_CHARACTERS
-    ]
+    for element in container.select(NOISE_SELECTOR):
+        element.decompose()
+    for paragraph in container.find_all("p"):
+        paragraph.insert_before(_ParagraphBreak(""))
+        paragraph.insert_after(_ParagraphBreak(""))
+
+    chunks: list[str] = []
+    paragraphs: list[str] = []
+    for node in container.descendants:
+        if isinstance(node, _ParagraphBreak) or (isinstance(node, Tag) and node.name == "br"):
+            paragraphs.append("".join(chunks))
+            chunks.clear()
+        elif type(node) in container.MAIN_CONTENT_STRING_TYPES:
+            chunks.append(str(node))
+    paragraphs.append("".join(chunks))
+    text = "\n\n".join(
+        cleaned
+        for paragraph in paragraphs
+        if (cleaned := " ".join(paragraph.replace("\x00", "").split()))
+    )
+    return text[:MAX_TEXT_CHARACTERS].rstrip()
+
+
+def _publisher_meta(soup: BeautifulSoup) -> dict[str, list[str]]:
+    fields: dict[str, list[str]] = {}
+    for tag in soup.find_all("meta"):
+        value = tag.get("content")
+        if not isinstance(value, str) or not value.strip():
+            continue
+        keys = {
+            key.strip().lower()
+            for key in (tag.get("name"), tag.get("property"))
+            if isinstance(key, str)
+        }
+        for key in keys & PUBLISHER_META:
+            fields.setdefault(key, []).append(value.replace("\x00", ""))
+    return fields
 
 
 def validate_article_url(url: str, source: SourceConfig) -> None:
@@ -107,7 +160,7 @@ class ArticleExtractor:
         max_bytes: int,
         validate: Callable[[str], None],
         html: bool = False,
-    ) -> bytes:
+    ) -> tuple[bytes, str]:
         # Redirects and retries share one budget; httpx never follows on its own.
         for attempt in range(1, MAX_HTTP_ATTEMPTS + 1):
             validate(url)
@@ -150,7 +203,7 @@ class ArticleExtractor:
                             if len(body) + len(chunk) > max_bytes:
                                 raise ExtractionError("response_too_large")
                             body.extend(chunk)
-                        return bytes(body)
+                        return bytes(body), str(response.url)
             except httpx.TimeoutException:
                 if attempt == MAX_HTTP_ATTEMPTS:
                     raise ExtractionError("timeout") from None
@@ -174,7 +227,9 @@ class ArticleExtractor:
                     raise ExtractionError("url_blocked") from None
 
             try:
-                body = self._fetch(source.robots_url, max_bytes=MAX_ROBOTS_BYTES, validate=validate)
+                body, _ = self._fetch(
+                    source.robots_url, max_bytes=MAX_ROBOTS_BYTES, validate=validate
+                )
             except ExtractionError:
                 raise ExtractionError("robots_unavailable") from None
             parser = RobotFileParser()
@@ -203,8 +258,10 @@ class ArticleExtractor:
                 if not robots.can_fetch(USER_AGENT, destination):
                     raise ExtractionError("robots_blocked")
 
-            payload = self._fetch(url, max_bytes=MAX_HTML_BYTES, validate=validate, html=True)
-            return image_from_html(payload, url)
+            payload, final_url = self._fetch(
+                url, max_bytes=MAX_HTML_BYTES, validate=validate, html=True
+            )
+            return image_from_html(payload, final_url)
         except ExtractionError:
             return None
 
@@ -214,6 +271,7 @@ class ArticleExtractor:
         rss_description: str | None,
         source: SourceConfig,
         *,
+        title: str = "",
         source_id: int | None = None,
         article_id: int | None = None,
         job_id: int | None = None,
@@ -222,6 +280,8 @@ class ArticleExtractor:
         text = ""
         origin = None
         image = None
+        metadata = None
+        final_url = url
         if not source.is_usable:
             # No fallback reuse for an inactive/unreviewed source.
             result = ExtractionResult(None, None, False, "source_not_permitted")
@@ -237,25 +297,40 @@ class ArticleExtractor:
                     if not robots.can_fetch(USER_AGENT, destination):
                         raise ExtractionError("robots_blocked")
 
-                payload = self._fetch(url, max_bytes=MAX_HTML_BYTES, validate=validate, html=True)
-                image = image_from_html(
-                    payload, url, content_selector=source.article_extraction.content_selector
+                payload, final_url = self._fetch(
+                    url, max_bytes=MAX_HTML_BYTES, validate=validate, html=True
                 )
-                text = clean_text(payload, selector=source.article_extraction.content_selector)
+                soup = BeautifulSoup(payload, "html.parser")
+                container = soup.select_one(source.article_extraction.content_selector)
+                metadata = _publisher_meta(soup) or None
+                image = image_from_document(soup, final_url, container)
+                text = _body_text(container) if container is not None else ""
                 if not text:
                     raise ExtractionError("missing_article_body")
                 origin = ContentOrigin.EXTRACTED
-                if len(text) < MIN_TEXT_CHARACTERS:
-                    raise ExtractionError("short_article_body")
             except ExtractionError as exc:
                 failure = str(exc)
-                excerpt = clean_text(rss_description or "")
+                excerpt = clean_text(rss_description or "") if rss_description else ""
                 if excerpt:
                     text, origin = excerpt, ContentOrigin.RSS_EXCERPT
-            usable = len(text) >= MIN_TEXT_CHARACTERS
-            if not usable:
-                failure = f"{failure}; {'insufficient_text' if text else 'missing_text'}"
-            result = ExtractionResult(text or None, origin, usable, failure, image)
+            reasons = quality_reasons(
+                text=text,
+                origin=origin,
+                url=final_url,
+                title=title,
+                description=rss_description,
+                publisher_meta=metadata,
+            )
+            if (
+                origin == ContentOrigin.EXTRACTED
+                and is_media_url(url)
+                and "media_url" not in reasons
+            ):
+                reasons = ("media_url", *reasons)
+            codes = (*reasons, failure) if failure else reasons
+            result = ExtractionResult(
+                text or None, origin, not codes, "; ".join(codes) or None, image, metadata
+            )
         logger.info(
             LogEvent.ARTICLE_TEXT_EVALUATED,
             extra={

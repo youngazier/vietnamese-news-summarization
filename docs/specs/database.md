@@ -18,7 +18,7 @@ All IDs are `BigInteger Identity()` primary keys. All timestamps are `TIMESTAMPT
 | Table | Fields (nullable marked `?`) |
 | --- | --- |
 | `sources` | `name` varchar(120); `rss_url` text **unique**; `is_active` bool (default true); `last_fetched_at?` |
-| `articles` | `source_id` FK; `original_url`, `canonical_url` **unique**, `title` text; `image_url?`, `rss_description?`, `content?` text; `content_origin?`; `processing_status` (default `pending`); `processing_error?`; `published_at?`; `created_at`; `updated_at` |
+| `articles` | `source_id` FK; `original_url`, `canonical_url` **unique**, `title` text; `image_url?`, `rss_description?`, `content?` text; `content_origin?`; `publisher_meta?` JSONB; `processing_status` (default `pending`); `processing_error?`; `published_at?`; `created_at`; `updated_at` |
 | `summaries` | `article_id` FK **unique** (one summary per article); `summary_text`; `category`; `keywords` JSONB array; `summarize_model_name`, `agent_model_name` varchar(160); `approved` bool; `review_feedback?`; `draft_attempts` (1–2); `input_truncated` bool; `human_review_decision?`, `human_review_note?`, `human_reviewed_at?`; `created_at`; `updated_at` |
 | `ingestion_jobs` | `source_id?` FK (NULL = all active sources); `status` (default `pending`); `trigger`; `attempts`; counters `articles_created/summarized/processed/failed/needs_review`; `error_message?`; `created_at`; `started_at?`; `finished_at?` |
 
@@ -39,6 +39,7 @@ Defined in `backend/app/models/enums.py` and stored as VARCHAR with named check 
 ## Rules and constraints
 
 - **Deduplication:** `articles.canonical_url` is unique; inserts use `ON CONFLICT DO NOTHING RETURNING id`. Never rely on in-memory sets.
+- **Publisher metadata:** `articles.publisher_meta` is NULL when missing. Otherwise it maps `article:section`, `its_subsection`, `news_keywords`, `article:tag`, `its_tag`, `its_type` and `its_wordcount` to arrays of raw values. Repeated tags retain their page order.
 - **Counters:** nonnegative, and `articles_processed = summarized + failed + needs_review`.
 - **Visibility:** a summary is shown only when the article is `ready` **and** the summary is `approved`. Graph approval writes both fields in one transaction. Rejection writes an unapproved draft, `needs_review` status and the job counter together. The API excludes these rejected articles.
 - **Human review columns** (revision `0004`): a check requires `accept` ⇒ approved and `decline` ⇒ not approved with a note. The manual-review UI/API was removed on 2026-11-07; the unused columns are scheduled for removal in P2.2.
@@ -55,6 +56,7 @@ Defined in `backend/app/models/enums.py` and stored as VARCHAR with named check 
 | `0002` | Rename summary `model_name` → `summarize_model_name` |
 | `0003` | Add nullable `articles.image_url` |
 | `0004` | Add `human_review_*` audit columns and check |
+| `0005` | Add nullable `articles.publisher_meta` |
 
 ```sh
 uv run --locked alembic upgrade head

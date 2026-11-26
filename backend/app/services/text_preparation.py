@@ -4,11 +4,11 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
 from app.core.source_config import SourceConfig
-from app.models import Article, ContentOrigin, ProcessingStatus
+from app.models import Article, ProcessingStatus
 from app.services.article_extractor import ArticleExtractor, ExtractionResult
 from app.services.job_service import record_article_result
 from app.services.source_guard import require_active_source
-from sqlalchemy import Executable, func, select, update
+from sqlalchemy import Executable, func, or_, select, update
 from sqlalchemy.orm import Session
 
 
@@ -25,21 +25,27 @@ def _extract_and_update(
     source_id: int,
     config: SourceConfig,
     extractor: ArticleExtractor,
-    rows: Iterable[tuple[int, str, str | None]],
-    build_update: Callable[[int, str, str | None, ExtractionResult], tuple[Executable, bool]],
+    rows: Iterable[tuple[int, str, str, str | None]],
+    build_update: Callable[[int, str, str, str | None, ExtractionResult], tuple[Executable, bool]],
     *,
     job_id: int | None = None,
     should_stop: Callable[[], bool] = lambda: False,
 ) -> TextPreparationResult:
     prepared_ids = []
     pending = needs_review = skipped = 0
-    for article_id, url, description in rows:
+    for article_id, url, title, description in rows:
         if should_stop():
             break
         result = extractor.extract(
-            url, description, config, source_id=source_id, article_id=article_id, job_id=job_id
+            url,
+            description,
+            config,
+            title=title,
+            source_id=source_id,
+            article_id=article_id,
+            job_id=job_id,
         )
-        statement, is_pending = build_update(article_id, url, description, result)
+        statement, is_pending = build_update(article_id, url, title, description, result)
         with factory() as session, session.begin():
             require_active_source(session, source_id, config)
             saved_id = session.scalar(statement)
@@ -76,7 +82,7 @@ def prepare_pending_articles(
     with factory() as session, session.begin():
         require_active_source(session, source_id, config)
         query = (
-            select(Article.id, Article.original_url, Article.rss_description)
+            select(Article.id, Article.original_url, Article.title, Article.rss_description)
             .where(
                 Article.source_id == source_id,
                 Article.processing_status == ProcessingStatus.PENDING,
@@ -90,7 +96,7 @@ def prepare_pending_articles(
         rows = session.execute(query.limit(max_articles)).all()
 
     def build_update(
-        article_id: int, url: str, description: str | None, result: ExtractionResult
+        article_id: int, url: str, title: str, description: str | None, result: ExtractionResult
     ) -> tuple[Executable, bool]:
         status = ProcessingStatus.PENDING if result.usable else ProcessingStatus.NEEDS_REVIEW
         statement = (
@@ -101,10 +107,12 @@ def prepare_pending_articles(
                 Article.content.is_(None),
                 Article.content_origin.is_(None),
                 Article.original_url == url,
+                Article.title == title,
                 Article.rss_description.is_not_distinct_from(description),
             )
             .values(
                 image_url=func.coalesce(Article.image_url, result.image_url),
+                publisher_meta=result.publisher_meta,
                 content=result.text,
                 content_origin=result.content_origin,
                 processing_status=status,
@@ -145,24 +153,29 @@ def recover_review_articles(
         raise ValueError("Text preparation limit must be positive")
     if not (config.article_extraction_allowed and config.ai_processing_allowed):
         return TextPreparationResult((), 0, 0, 0)
+    was_disabled = or_(
+        Article.processing_error.like("extraction_disabled;%"),
+        Article.processing_error == "rss_excerpt_only; extraction_disabled",
+        Article.processing_error == "missing_text; extraction_disabled",
+    )
     with factory() as session, session.begin():
         require_active_source(session, source_id, config)
         rows = session.execute(
-            select(Article.id, Article.original_url, Article.rss_description)
+            select(Article.id, Article.original_url, Article.title, Article.rss_description)
             .where(
                 Article.source_id == source_id,
                 Article.processing_status == ProcessingStatus.NEEDS_REVIEW,
                 ~Article.summary.has(),
-                Article.processing_error.like("extraction_disabled;%"),
+                was_disabled,
             )
             .order_by(Article.id)
             .limit(max_articles)
         ).all()
 
     def build_update(
-        article_id: int, url: str, description: str | None, result: ExtractionResult
+        article_id: int, url: str, title: str, description: str | None, result: ExtractionResult
     ) -> tuple[Executable, bool]:
-        recovered = result.usable and result.content_origin == ContentOrigin.EXTRACTED
+        recovered = result.usable
         statement = (
             update(Article)
             .where(
@@ -170,13 +183,19 @@ def recover_review_articles(
                 Article.processing_status == ProcessingStatus.NEEDS_REVIEW,
                 ~Article.summary.has(),
                 Article.original_url == url,
+                Article.title == title,
                 Article.rss_description.is_not_distinct_from(description),
-                Article.processing_error.like("extraction_disabled;%"),
+                was_disabled,
             )
             .values(
                 image_url=func.coalesce(Article.image_url, result.image_url),
-                content=result.text if recovered else Article.content,
-                content_origin=result.content_origin if recovered else Article.content_origin,
+                publisher_meta=(
+                    result.publisher_meta
+                    if result.publisher_meta is not None
+                    else Article.publisher_meta
+                ),
+                content=result.text if result.text is not None else Article.content,
+                content_origin=result.content_origin or Article.content_origin,
                 processing_status=(
                     ProcessingStatus.PENDING if recovered else ProcessingStatus.NEEDS_REVIEW
                 ),

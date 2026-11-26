@@ -9,7 +9,7 @@ from app.agents.state import NewsState
 from app.core.logging import LogEvent
 from app.core.source_config import SourceConfig
 from app.models import Article, ProcessingStatus
-from app.services.article_extractor import MAX_TEXT_CHARACTERS, MIN_TEXT_CHARACTERS
+from app.services.article_quality import quality_reasons
 from app.services.job_service import record_article_result
 from app.services.source_guard import require_active_source
 from app.services.summary_persistence import persist_summary
@@ -50,16 +50,21 @@ def process_article(
         article = session.scalar(select(Article).where(Article.id == article_id).with_for_update())
         if article.processing_status != ProcessingStatus.PENDING:
             return False
-        if (
-            article.content is None
-            or not MIN_TEXT_CHARACTERS <= len(article.content.strip()) <= MAX_TEXT_CHARACTERS
-            or article.content_origin is None
-        ):
+        reasons = quality_reasons(
+            text=article.content,
+            origin=article.content_origin,
+            url=article.original_url,
+            title=article.title,
+            description=article.rss_description,
+            publisher_meta=article.publisher_meta,
+        )
+        if reasons:
             article.processing_status = ProcessingStatus.NEEDS_REVIEW
-            article.processing_error = "Insufficient prepared source text"
+            article.processing_error = "; ".join(reasons)
             if job_id is not None:
                 record_article_result(session, job_id, ProcessingStatus.NEEDS_REVIEW)
             return True
+        assert article.content is not None and article.content_origin is not None
         state: NewsState = {
             "article_id": article.id,
             "title": article.title,

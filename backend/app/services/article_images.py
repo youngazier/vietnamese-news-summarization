@@ -3,7 +3,7 @@
 import ipaddress
 from urllib.parse import urljoin, urlsplit
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag
 
 
 def image_url(value: object, base_url: str) -> str | None:
@@ -46,6 +46,11 @@ def image_from_html(
     markup: str | bytes, base_url: str, *, content_selector: str | None = None
 ) -> str | None:
     soup = BeautifulSoup(markup, "html.parser")
+    container = soup.select_one(content_selector) if content_selector is not None else None
+    return image_from_document(soup, base_url, container)
+
+
+def image_from_document(soup: BeautifulSoup, base_url: str, container: Tag | None) -> str | None:
     candidates = [
         tag.get("content")
         for selector in (
@@ -56,11 +61,9 @@ def image_from_html(
         )
         for tag in soup.select(selector)
     ]
-    if content_selector is not None:
-        container = soup.select_one(content_selector)
-        if container is not None:
-            for tag in container.select("img"):
-                candidates.extend([tag.get("data-src"), tag.get("src")])
+    if container is not None:
+        for tag in container.select("img"):
+            candidates.extend([tag.get("data-src"), tag.get("src")])
     return next((url for candidate in candidates if (url := image_url(candidate, base_url))), None)
 
 

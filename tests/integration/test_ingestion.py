@@ -196,18 +196,18 @@ def test_prepare_persists_provenance_quality_and_replay(
             factory, long_entry.source_id, preparation_config, extractor
         )
     assert result.prepared_ids == inserted.inserted_ids
-    assert result.pending == 1 and result.needs_review == 2
+    assert result.pending == 0 and result.needs_review == 3
     assert repeat.prepared_ids == ()
     with db_session.begin():
         db_session.expire_all()
         rows = db_session.scalars(select(Article).order_by(Article.id)).all()
         assert rows[0].content == long_entry.rss_description.strip()
         assert rows[0].content_origin == ContentOrigin.RSS_EXCERPT
-        assert rows[0].processing_status == ProcessingStatus.PENDING
-        assert rows[0].processing_error == "extraction_disabled"
+        assert rows[0].processing_status == ProcessingStatus.NEEDS_REVIEW
+        assert rows[0].processing_error == "rss_excerpt_only; extraction_disabled"
         assert rows[1].content is rows[1].content_origin is None
         assert rows[1].processing_status == ProcessingStatus.NEEDS_REVIEW
-        assert rows[1].processing_error == "extraction_disabled; missing_text"
+        assert rows[1].processing_error == "missing_text; extraction_disabled"
         assert rows[2].processing_status == ProcessingStatus.NEEDS_REVIEW
 
 
@@ -239,13 +239,13 @@ def test_prepare_short_excerpt_and_old_backlog_respects_limit(
         row = db_session.get(Article, inserted.inserted_ids[0])
         assert row.content_origin == ContentOrigin.RSS_EXCERPT
         assert row.processing_status == ProcessingStatus.NEEDS_REVIEW
-        assert row.processing_error == "extraction_disabled; insufficient_text"
+        assert row.processing_error == "rss_excerpt_only; extraction_disabled"
 
 
 def test_old_review_excerpt_recovers_from_permitted_full_text(
     db_session, migrated_database, feed_entries, preparation_config
 ):
-    entry = replace(feed_entries[0], rss_description="Trích đoạn ngắn.")
+    entry = replace(feed_entries[0], title="Thư viện cộng đồng", rss_description="Trích đoạn ngắn.")
     with db_session.begin():
         article_id = insert_article(db_session, entry)
     factory = sessionmaker(bind=migrated_database.connection, expire_on_commit=False)
@@ -296,14 +296,15 @@ def test_old_review_excerpt_recovers_from_permitted_full_text(
         article = db_session.get(Article, article_id)
         assert article.processing_status == ProcessingStatus.PENDING
         assert article.content_origin == ContentOrigin.EXTRACTED
-        assert len(article.content) >= 200
+        assert "\n\n" in article.content
+        assert article.publisher_meta["article:section"] == ["Giáo dục"]
         assert article.processing_error is None
 
 
 def test_review_recovery_records_failed_extraction_once(
     db_session, migrated_database, feed_entries, preparation_config
 ):
-    entry = replace(feed_entries[0], rss_description="Trích đoạn ngắn.")
+    entry = replace(feed_entries[0], title="Thư viện cộng đồng", rss_description="Trích đoạn ngắn.")
     with db_session.begin():
         article_id = insert_article(db_session, entry)
     factory = sessionmaker(bind=migrated_database.connection, expire_on_commit=False)
@@ -345,7 +346,7 @@ def test_review_recovery_records_failed_extraction_once(
         article = db_session.get(Article, article_id)
         assert article.processing_status == ProcessingStatus.NEEDS_REVIEW
         assert article.content == entry.rss_description
-        assert article.processing_error == "access_denied; insufficient_text"
+        assert article.processing_error == "rss_excerpt_only; access_denied"
 
 
 @pytest.mark.parametrize(

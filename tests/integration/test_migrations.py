@@ -15,7 +15,7 @@ def assert_head(database):
     revision = database.connection.execute(
         text("SELECT version_num FROM alembic_version")
     ).scalar_one()
-    assert revision == "0004"
+    assert revision == "0005"
     # Inspection/SELECT starts a transaction; end it before migrate() opens one.
     database.connection.rollback()
 
@@ -158,3 +158,56 @@ def test_article_image_column_lifecycle_preserves_article(test_database):
             )
             is None
         )
+
+
+def test_publisher_meta_migration_lifecycle(test_database):
+    db = test_database
+    db.migrate("upgrade", "0004")
+    with db.connection.begin():
+        source = db.connection.scalar(
+            text(
+                "INSERT INTO sources (name, rss_url) VALUES ('Fixture', 'https://example.com/rss') "
+                "RETURNING id"
+            )
+        )
+        article = db.connection.scalar(
+            text(
+                "INSERT INTO articles (source_id, title, original_url, canonical_url) "
+                "VALUES (:source, 'Title', 'https://example.com/a', 'https://example.com/a') "
+                "RETURNING id"
+            ),
+            {"source": source},
+        )
+
+    db.migrate("upgrade", "0005")
+    with db.connection.begin():
+        assert (
+            db.connection.scalar(
+                text("SELECT publisher_meta FROM articles WHERE id = :id"), {"id": article}
+            )
+            is None
+        )
+        db.connection.execute(
+            text("UPDATE articles SET publisher_meta = CAST(:meta AS jsonb) WHERE id = :id"),
+            {"meta": '{"article:tag":["One","Two"]}', "id": article},
+        )
+
+    db.migrate("upgrade", "0005")
+    with db.connection.begin():
+        assert db.connection.scalar(
+            text("SELECT publisher_meta FROM articles WHERE id = :id"), {"id": article}
+        ) == {"article:tag": ["One", "Two"]}
+
+    db.migrate("downgrade", "0004")
+    with db.connection.begin():
+        columns = {column["name"] for column in inspect(db.connection).get_columns("articles")}
+        assert "publisher_meta" not in columns
+
+    db.migrate("upgrade", "0005")
+    with db.connection.begin():
+        assert tuple(
+            db.connection.execute(
+                text("SELECT title, publisher_meta FROM articles WHERE id = :id"),
+                {"id": article},
+            ).one()
+        ) == ("Title", None)

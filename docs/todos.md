@@ -15,7 +15,7 @@ Living task list aligned with [vision.md](vision.md). Update it whenever a task 
 | Ingestion refactor (5 phases) | Done, merged 2026-11-25 |
 | Reader UI (feed, client filter/search, detail dialog) | MVP mostly done; full routing/search in `P4.3` |
 | Docker (`frontend`, `api`, `worker`) | Offline, model isolation and restart checks passed. Live job completion blocked by Gemini HTTP 503 → `P0.3` |
-| Post-MVP vision ([vision.md](vision.md)) | Drafted 2026-11-26; execution starts at `P0.1` |
+| Post-MVP vision ([vision.md](vision.md)) | P1.1 verified. P1.2 pending. |
 | Third source (Thanh Niên) | Blocked on reuse terms |
 
 ## Agent execution guide
@@ -97,11 +97,11 @@ Fix HTML paragraph extraction once and establish reproducible baseline metrics *
 
 **Read first:** [AGENTS.md](../AGENTS.md), [vision.md](vision.md) (Section 1: Quality gate, Categories and tags), [specs/ingestion.md](specs/ingestion.md), [specs/database.md](specs/database.md), [specs/source-evidence.md](specs/source-evidence.md).
 
-- [ ] Update `backend/app/services/article_extractor.py` to strip `<figcaption>`, `figure`, related-article boxes, and share/comment blocks in DOM while preserving paragraph breaks (`\n\n`) from `<p>` blocks instead of flattening text into one line.
-- [ ] In the **same single BeautifulSoup parse pass**, extract raw publisher `<meta>` tags (`article:section`, `its_subsection`, `news_keywords`, `article:tag`, `its_tag`, `its_type`, `its_wordcount`) and store raw publisher section, keywords, and content-type hints on `articles` via a new Alembic migration (test upgrade → repeated upgrade → downgrade → re-upgrade).
-- [ ] Never summarize `content_origin=rss_excerpt` rows; route them to `needs_review` with reason code `rss_excerpt_only`.
-- [ ] Replace `MIN_TEXT_CHARACTERS = 200` with combined deterministic signals: minimum word count, sentence count, token overlap with RSS title/description, duplicate-line ratio, boilerplate phrase blocklist (`"Đăng nhập"`, `"Xem thêm"`, …), `its_type` photo/video check, and `/video/` or `/photo/` URL patterns; store exact failing reason codes in `articles.processing_error`.
-- [ ] Add fixture-based unit tests and PostgreSQL migration integration tests; update [specs/ingestion.md](specs/ingestion.md) and [specs/database.md](specs/database.md); write a milestone log in [logs/](logs/).
+- [x] Update `backend/app/services/article_extractor.py` to strip `<figcaption>`, `figure`, related-article boxes, and share/comment blocks in DOM while preserving paragraph breaks (`\n\n`) from `<p>` blocks instead of flattening text into one line.
+- [x] In the **same single BeautifulSoup parse pass**, extract raw publisher `<meta>` tags (`article:section`, `its_subsection`, `news_keywords`, `article:tag`, `its_tag`, `its_type`, `its_wordcount`) and store raw publisher section, keywords, and content-type hints on `articles` via a new Alembic migration (test upgrade → repeated upgrade → downgrade → re-upgrade).
+- [x] Never summarize `content_origin=rss_excerpt` rows; route them to `needs_review` with reason code `rss_excerpt_only`.
+- [x] Replace `MIN_TEXT_CHARACTERS = 200` with combined deterministic signals: minimum word count, sentence count, token overlap with RSS title/description, duplicate-line ratio, boilerplate phrase blocklist (`"Đăng nhập"`, `"Xem thêm"`, …), `its_type` photo/video check, and `/video/` or `/photo/` URL patterns; store exact failing reason codes in `articles.processing_error`.
+- [x] Add fixture-based unit tests and PostgreSQL migration integration tests; update [specs/ingestion.md](specs/ingestion.md) and [specs/database.md](specs/database.md); write a milestone log in [logs/](logs/).
 
 **Done when:** Paragraph breaks and publisher `<meta>` fields are captured in one pass, no RSS excerpt or video/photo stub reaches summarization, and every rejection stores a clear reason code.
 

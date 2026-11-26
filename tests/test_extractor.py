@@ -74,6 +74,16 @@ def test_permitted_extraction_cleans_fixture(source):
     assert result.failure_reason is None
     assert result.text.startswith("Thư viện cộng đồng")
     assert "dữ liệu hư cấu" in result.text
+    assert result.text.count("\n\n") == 1
+    assert result.publisher_meta == {
+        "article:section": ["Giáo dục"],
+        "its_subsection": ["giao-duc"],
+        "news_keywords": ["thư viện, đọc sách"],
+        "article:tag": ["thư viện", "đọc sách"],
+        "its_tag": ["cộng đồng"],
+        "its_type": ["text"],
+        "its_wordcount": ["83"],
+    }
     assert "KHÔNG LẤY" not in result.text
     assert "SECRET_SCRIPT" not in result.text
     assert "<" not in result.text
@@ -83,8 +93,8 @@ def test_permitted_extraction_cleans_fixture(source):
 def test_extraction_disabled_makes_no_requests(source):
     source = source.model_copy(update={"article_extraction_allowed": False})
     result, requests, waits = run_extraction(source, html_response)
-    assert result.usable and result.content_origin == ContentOrigin.RSS_EXCERPT
-    assert result.failure_reason == "extraction_disabled"
+    assert not result.usable and result.content_origin == ContentOrigin.RSS_EXCERPT
+    assert result.failure_reason == "rss_excerpt_only; extraction_disabled"
     assert requests == waits == []
 
 
@@ -114,7 +124,7 @@ def test_no_fallback_reuse_for_unreviewed_source(source, change):
 def test_unreviewed_url_is_never_requested(source, url):
     result, requests, _ = run_extraction(source, html_response, url=url)
     assert result.content_origin == ContentOrigin.RSS_EXCERPT
-    assert result.failure_reason == "url_blocked"
+    assert result.failure_reason == "rss_excerpt_only; url_blocked"
     assert requests == []
 
 
@@ -131,7 +141,7 @@ def test_blocked_redirect_is_not_followed(source, destination, reason):
     result, requests, _ = run_extraction(
         source, lambda _: httpx.Response(302, headers={"Location": destination})
     )
-    assert result.usable and result.failure_reason == reason
+    assert not result.usable and result.failure_reason == f"rss_excerpt_only; {reason}"
     assert len(requests) == 2
 
 
@@ -175,8 +185,8 @@ def test_http_failures_fall_back_with_bounded_requests(source, failure, reason):
         return httpx.Response(failure, headers={"Location": "/news/loop", "Retry-After": "0"})
 
     result, requests, _ = run_extraction(source, handler)
-    assert result.usable and result.text == EXCERPT.strip()
-    assert result.failure_reason == reason
+    assert not result.usable and result.text == EXCERPT.strip()
+    assert result.failure_reason == f"rss_excerpt_only; {reason}"
     assert len(requests) == (2 if failure in {403, 404} else 4)
 
 
@@ -188,7 +198,6 @@ def test_http_failures_fall_back_with_bounded_requests(source, failure, reason):
             "text/html",
             "missing_article_body",
         ),
-        (b"<article class='news-body'>Short</article>", "text/html", "short_article_body"),
         (b"SECRET_PAYLOAD", "application/json", "unexpected_content_type"),
     ],
 )
@@ -197,19 +206,19 @@ def test_unusable_html_falls_back(source, payload, content_type, reason):
         source,
         lambda _: httpx.Response(200, content=payload, headers={"Content-Type": content_type}),
     )
-    assert result.usable and result.content_origin == ContentOrigin.RSS_EXCERPT
-    assert result.failure_reason == reason
+    assert not result.usable and result.content_origin == ContentOrigin.RSS_EXCERPT
+    assert result.failure_reason == f"rss_excerpt_only; {reason}"
 
 
-@pytest.mark.parametrize("length, usable", [(0, False), (199, False), (200, True), (201, True)])
-def test_exact_adequacy_boundary(source, length, usable):
+@pytest.mark.parametrize("length", [0, 199, 200, 201])
+def test_no_excerpt_length_is_eligible(source, length):
     source = source.model_copy(update={"article_extraction_allowed": False})
     result, requests, _ = run_extraction(source, html_response, excerpt="á" * length)
-    assert result.usable is usable
+    assert not result.usable
     assert result.content_origin == (ContentOrigin.RSS_EXCERPT if length else None)
     assert result.text == ("á" * length or None)
-    if not usable:
-        assert result.failure_reason.endswith("insufficient_text" if length else "missing_text")
+    reason = "rss_excerpt_only" if length else "missing_text"
+    assert result.failure_reason == f"{reason}; extraction_disabled"
     assert requests == []
 
 
@@ -227,18 +236,18 @@ def test_short_extracted_text_keeps_provenance_without_excerpt(source):
             text="<article class='news-body'>Đoạn ngắn.</article>",
             headers={"Content-Type": "text/html"},
         ),
-        excerpt=None,
+        excerpt=EXCERPT,
     )
     assert result.text == "Đoạn ngắn." and result.content_origin == ContentOrigin.EXTRACTED
     assert not result.usable
-    assert result.failure_reason == "short_article_body; insufficient_text"
+    assert result.failure_reason == "too_few_words; too_few_sentences; low_rss_overlap"
 
 
 def test_malformed_redirect_uses_redacted_fallback(source):
     result, requests, _ = run_extraction(
         source, lambda _: httpx.Response(302, headers={"Location": "https://["})
     )
-    assert result.usable and result.failure_reason == "invalid_redirect"
+    assert not result.usable and result.failure_reason == "rss_excerpt_only; invalid_redirect"
     assert len(requests) == 2
 
 
@@ -256,7 +265,7 @@ def test_decoded_response_size_cap(source, compressed):
     result, requests, _ = run_extraction(
         source, lambda _: httpx.Response(200, content=payload, headers=headers)
     )
-    assert result.usable and result.failure_reason == "response_too_large"
+    assert not result.usable and result.failure_reason == "rss_excerpt_only; response_too_large"
     assert len(requests) == 2
 
 
@@ -277,7 +286,7 @@ def test_robots_unavailable_never_fetches_article(source, response):
 
     with httpx.Client(transport=httpx.MockTransport(handler)) as client:
         result = ArticleExtractor(client, sleep=lambda _: None).extract(URL, EXCERPT, source)
-    assert result.failure_reason == "robots_unavailable"
+    assert result.failure_reason == "rss_excerpt_only; robots_unavailable"
     assert len(requests) == 1 and requests[0].url.path == "/robots.txt"
 
 
@@ -286,7 +295,7 @@ def test_logging_keeps_context_without_payloads(source, caplog):
         result, _, _ = run_extraction(source, lambda _: httpx.Response(403, text="SECRET_PAYLOAD"))
     record = caplog.records[-1]
     assert (record.source_id, record.article_id, record.job_id) == (7, 11, 13)
-    assert record.failure_class == result.failure_reason == "access_denied"
+    assert record.failure_class == result.failure_reason == "rss_excerpt_only; access_denied"
     assert "SECRET" not in caplog.text and EXCERPT not in caplog.text and URL not in caplog.text
 
 
@@ -332,3 +341,35 @@ def test_extraction_carries_page_image(source):
         source, lambda _: httpx.Response(200, content=markup, headers={"Content-Type": "text/html"})
     )
     assert result.usable and result.image_url == "https://cdn.example.com/a.jpg"
+
+
+def test_page_parsed_once_and_media_hint_blocks_inference(source, monkeypatch):
+    from bs4 import BeautifulSoup
+
+    parsed = []
+
+    def parse(payload, parser):
+        parsed.append(payload)
+        return BeautifulSoup(payload, parser)
+
+    monkeypatch.setattr("app.services.article_extractor.BeautifulSoup", parse)
+    monkeypatch.setattr("app.services.article_images.BeautifulSoup", parse)
+    page = HTML.replace(b'content="text"', b'content="video"')
+    result, _, _ = run_extraction(
+        source,
+        lambda _: httpx.Response(200, content=page, headers={"Content-Type": "text/html"}),
+        excerpt=None,
+    )
+    assert parsed == [page]
+    assert result.content_origin == ContentOrigin.EXTRACTED
+    assert result.failure_reason == "media_content_type"
+
+
+def test_redirect_to_photo_page_fails_gate(source):
+    def handler(request):
+        if request.url.path == "/news/article":
+            return httpx.Response(302, headers={"Location": "/news/photo/album"})
+        return html_response(request)
+
+    result, _, _ = run_extraction(source, handler, excerpt=None)
+    assert result.failure_reason == "media_url"

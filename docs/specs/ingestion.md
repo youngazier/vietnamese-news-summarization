@@ -10,7 +10,7 @@ flowchart LR
     Feed --> Insert[Normalize URL, insert new articles]
     Insert --> Pending[Oldest unprepared pending rows]
     Pending --> Text[Permitted HTML extraction or RSS fallback]
-    Text --> Quality{>= 200 chars?}
+    Text --> Quality{Full text passes gate?}
     Quality -->|Yes| Ready[Save text, stay pending]
     Quality -->|No| Review[Save text, needs_review]
 ```
@@ -35,12 +35,25 @@ flowchart LR
 | --- | --- |
 | `text` | Cleaned plain text, ≤ 20,000 characters, or `None` |
 | `content_origin` | `extracted`, `rss_excerpt`, or `None` |
-| `usable` | At least 200 cleaned characters |
-| `failure_reason` | Fixed redacted codes, e.g. `extraction_disabled; insufficient_text` |
+| `usable` | Permitted full text passes the deterministic quality gate |
+| `failure_reason` | Semicolon-separated fixed codes, or NULL for a pass |
+| `publisher_meta` | Raw allowlisted HTML meta values grouped by original key, or NULL |
 
-- Usable text stays `pending` for AI processing; short/missing text becomes `needs_review`.
-- HTML extraction uses only the configured CSS content selector; it never falls back to the whole page. Scripts, nav, forms, ads and related content are removed.
-- `recover_review_articles()` retries older excerpt-only `needs_review` rows (reason `extraction_disabled; ...`) once extraction is enabled, returning them to `pending`.
+The extractor builds one BeautifulSoup document for the fetched HTML. It reads the publisher meta tags and image candidates from that document, then removes figures, captions, related articles, sharing and comment widgets, scripts, navigation, forms and ads from the configured article container. Paragraphs retain their order and are separated by `\n\n`. A missing or hidden container is treated as missing article text.
+
+The gate runs during preparation and again at the AI claim boundary, including for existing pending rows. Its starting thresholds are 60 Unicode word tokens, three sentences with at least five tokens each, at least 10% distinct non-stop-word overlap with either qualifying RSS field and at most 40% duplicate nonempty lines. A qualifying RSS field has at least three distinct terms. The gate also rejects near-copies of the RSS description, substantial boilerplate, media path segments on the original or final URL, media values in `its_type` and severe shortfalls against a numeric `its_wordcount` hint. These thresholds are provisional until the P1.2 calibration runs. Standalone boilerplate lines are excluded from the gate's text counts. The gate flags boilerplate if it accounts for at least one third of the body words or if the remaining body falls below the minimum word count. A short related-link footer can coexist with an otherwise sufficient article.
+
+| Reason code | Trigger |
+| --- | --- |
+| `rss_excerpt_only` | Only an RSS excerpt could be stored |
+| `missing_text`, `text_too_long` | No usable body or stored text exceeds the 20,000-character bound |
+| `too_few_words`, `too_few_sentences` | Body is too short on either threshold |
+| `low_rss_overlap`, `rss_teaser_match` | RSS vocabulary mismatch or body is effectively the description |
+| `duplicate_lines`, `boilerplate` | Line repetition or substantial boilerplate |
+| `media_url`, `media_content_type` | Media URL segment or publisher media type |
+| `publisher_wordcount_mismatch` | A single numeric publisher count of at least 120 and extracted word count below 35% of it |
+
+Usable bodies stay `pending`. A rejected body or RSS fallback is stored with its correct origin, goes to `needs_review` and counts once toward the job's terminal results. Fetch failures can add context such as `rss_excerpt_only; robots_blocked`. The code keeps the rejected HTML body when one was found. Recovery retries rows without a draft that were previously rejected because extraction was disabled. A newly extracted body must pass the same gate. Existing terminal article outcomes are preserved.
 
 ## HTTP and access rules
 
@@ -64,7 +77,7 @@ Enabling extraction requires `article_extraction_allowed: true` plus an `article
 ## Transactions and recovery
 
 - Feed fetching finishes **before** the insert transaction opens.
-- Text preparation reads a snapshot, closes the transaction, does publisher IO, then commits each result separately with a conditional update (still pending, unprepared, same URL/description). Concurrently changed rows are skipped.
+- Text preparation reads a snapshot, closes the transaction, does publisher IO, then commits each result separately with a conditional update (still pending, unprepared, same URL/title/description). Concurrently changed rows are skipped.
 - Committed work survives interruption; later runs resume old unprepared rows even if they have left the feed.
 - Insertion and preparation have separate caps (`JOB_MAX_ARTICLE_INSERTIONS`, `JOB_MAX_ARTICLE_RESULTS`, default 20 each). Older backlog goes first.
 
