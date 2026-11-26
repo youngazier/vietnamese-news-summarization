@@ -13,5 +13,6 @@ Short record of key design decisions. Details live in the linked [specs](archite
 | 2026-10-12 | No authentication; all ports bind to `127.0.0.1` | Single local user, no shared access | Auth/accounts; public hosting |
 | 2026-10-14 | Keep Thanh Niên inactive | Its footer forbids copying without written consent; reuse terms unresolved | Activating it based on feed availability alone |
 | 2026-11-26 | Run locked backend and frontend checks on pushes and pull requests | Catch regressions before merging. Run integration, model and live checks separately because they require PostgreSQL, local weights or provider access | Manual quality checks alone |
+| 2026-11-26 | Publish only graph-approved summaries and keep rejected drafts in `needs_review` | Preserve rejection evidence while filtering rejected articles from the reader and counting them as needs review. Drop the unused `human_review_*` columns in P2.2 | Automatic approval of every completed draft |
 
 See [source evidence](specs/source-evidence.md), [summarization](specs/summarization.md), [backend](specs/backend.md) and [deployment](specs/deployment.md) for the current behavior.

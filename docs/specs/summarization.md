@@ -13,7 +13,7 @@ flowchart TD
     Review --> Gate{Approved?}
     Gate -->|Yes| Accepted((END: approved))
     Gate -->|No, attempts < 2| Draft
-    Gate -->|No, attempts = 2| Manual((END: needs_review))
+    Gate -->|No, attempts = 2| Rejected((END: needs_review))
 ```
 
 - Built by `agents/graph.py` (`build_news_graph`) with `StateGraph`, explicit conditional mapping, and `recursion_limit=8` as a safety stop.
@@ -72,7 +72,8 @@ Review checks names, dates, numbers, quotes and critical claims against the supp
 
 - `services/article_processing.py` (`process_article`, `NewsProcessor`) checks source AI permission, claims one pending article in a short committed transaction, then runs the graph outside any transaction. Inadequate text goes to `needs_review` without inference.
 - `services/summary_persistence.py` (`persist_summary`) locks the article, checks the source text is unchanged, and writes summary + article status + job counter in **one transaction**.
-- **Auto-approval (since 2026-11-07):** every completed graph result is saved with `approved=True` and status `ready`, so the personal reader shows all summaries. Gemini's review feedback is still stored for diagnostics.
+- The validated graph outcome determines publication. Approved drafts are saved as `approved=True` with article status `ready`. Exhausted reviews persist the final draft and review feedback with `approved=False`, set the article to `needs_review`, and increment the job’s needs-review counter. Rejected articles are excluded from the list and return 404 on detail reads.
+- Previously auto-approved rows retain their stored state because the previous persistence code discarded the review outcome and free-form feedback cannot reliably reconstruct it.
 - Model/provider/schema failures save `failed` with a fixed `AI processing failed` message and no partial summary. Ready/failed articles are never reprocessed automatically.
 - `services/pipeline.py` (`open_pipeline`) builds the graph and providers once for the worker and CLI.
 

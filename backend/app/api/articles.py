@@ -4,7 +4,7 @@ from app.db.session import get_db
 from app.models import Article, Category, ProcessingStatus, Summary
 from app.schemas import ArticleCard, ArticleDetail, ArticlePage, SourceRead, SummaryRead
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session, joinedload
 
 router = APIRouter(prefix="/articles", tags=["articles"])
@@ -16,6 +16,13 @@ def _is_visible(article: Article) -> bool:
         article.processing_status == ProcessingStatus.READY
         and summary is not None
         and summary.approved
+    )
+
+
+def _can_read_article() -> ColumnElement[bool]:
+    return ~(
+        (Article.processing_status == ProcessingStatus.NEEDS_REVIEW)
+        & Article.summary.has(Summary.approved.is_(False))
     )
 
 
@@ -45,7 +52,7 @@ def get_article(
 ) -> ArticleDetail:
     statement = (
         select(Article)
-        .where(Article.id == article_id)
+        .where(Article.id == article_id, _can_read_article())
         .options(
             joinedload(Article.source),
             joinedload(Article.summary),
@@ -81,7 +88,7 @@ def list_articles(
     source_id: Annotated[int | None, Query(gt=0)] = None,
     category: Category | None = None,
 ) -> ArticlePage:
-    filters = []
+    filters = [_can_read_article()]
     if source_id is not None:
         filters.append(Article.source_id == source_id)
     if q is not None:
