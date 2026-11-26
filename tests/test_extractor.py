@@ -6,8 +6,8 @@ from pathlib import Path
 
 import httpx
 import pytest
+from app.core.source_config import ArticleExtractionPolicy, SourceConfig, load_source_config
 from app.models import ContentOrigin
-from app.seed_sources import ArticleExtractionPolicy, SourceConfig, load_source_config
 from app.services.article_extractor import (
     MAX_HTML_BYTES,
     MAX_ROBOTS_BYTES,

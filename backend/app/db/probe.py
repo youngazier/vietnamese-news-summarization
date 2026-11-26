@@ -1,12 +1,11 @@
 import sys
 
+from app.core.config import get_settings
 from pydantic import ValidationError
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.pool import NullPool
-
-from app.core.config import get_settings
 
 
 def probe_database() -> int:

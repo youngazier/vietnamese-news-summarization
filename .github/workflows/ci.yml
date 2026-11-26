@@ -1,0 +1,32 @@
+name: CI
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.12.15"
+          python-version: "3.12"
+      - run: uv run --locked ruff check backend tests
+      - run: uv run --locked ruff format --check backend tests
+      - run: uv run --locked pytest -m "not integration and not model and not live" -q
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend run lint
+      - run: npm --prefix frontend run build

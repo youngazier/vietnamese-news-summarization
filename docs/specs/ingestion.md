@@ -19,7 +19,7 @@ flowchart LR
 
 | Stage | Code | Behavior |
 | --- | --- | --- |
-| Source config | `seed_sources.py`: `SourceConfig`, `load_source_config()`, `seed_sources()` | Pydantic validates `config/sources.json` before DB access. Seeds only `name`, `rss_url`, `is_active` (upsert by RSS URL). Policy fields stay in JSON. `SourceConfig.is_usable` is the single eligibility check. |
+| Source config | `core/source_config.py`: `SourceConfig`, `load_source_config()`. `cli/seed_sources.py`: `seed_sources()` | Pydantic validates `config/sources.json` before DB access. Seeds only `name`, `rss_url`, `is_active` (upsert by RSS URL). Policy fields stay in JSON. `SourceConfig.is_usable` is the single eligibility check. |
 | Fetch and parse | `services/rss_collector.py`: `RSSCollector.collect()` | Returns `FeedEntry` items. Cleans title/description HTML, skips entries without title or with invalid links, converts dates to UTC (else NULL). Malformed feed = error; empty feed = success. |
 | URL identity | `services/url_normalization.py`: `normalize_url()` | Lowercase scheme/host, drop default ports, fragments and tracking params; keep identifying path/query. Stores original and canonical URL. |
 | Insert | `services/feed_ingestion.py`: `ingest_entries()` → `insert_article()` | Conflict-safe insert. Duplicates never consume capacity or overwrite rows. |
@@ -78,19 +78,19 @@ Optional publisher metadata, independent of AI approval:
 - Backfill existing rows (fills only NULL `image_url`):
 
 ```sh
-uv run --locked python -m app.backfill_article_images                      # dry run
-uv run --locked python -m app.backfill_article_images --from-pages --apply # save
+uv run --locked python -m app.cli.backfill_article_images                      # dry run
+uv run --locked python -m app.cli.backfill_article_images --from-pages --apply # save
 ```
 
 ## Manual commands
 
 ```sh
-uv run --locked --env-file .env python -m app.seed_sources
+uv run --locked --env-file .env python -m app.cli.seed_sources
 uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --verify-repeat
 uv run --locked --env-file .env python -m app.cli.ingest --source-id 1 --prepare-only
 ```
 
-`--verify-repeat` replays the attempted slice and expects zero new inserts. `--prepare-only` skips collection and resumes text preparation. Logs carry source/article/job IDs and fixed failure classes, never article bodies, URLs from HTTPX, or credentials.
+`--verify-repeat` replays the attempted slice and expects zero new inserts. `--prepare-only` skips collection and resumes text preparation. Logs carry fixed event names and numeric source, article and job IDs. Publisher URLs, credentials and article text are excluded.
 
 ## Related
 

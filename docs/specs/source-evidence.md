@@ -71,7 +71,7 @@ These are application safeguards and proposed defaults, not publisher-specified 
 | Sending source text to Gemini / publishing generated summaries | Unresolved for all three |
 | D3.1: three sources cleared for intended ingestion scope | Pending; do not mark complete from availability alone |
 
-D3.2 stores all three reviews in `config/sources.json`. `app.seed_sources` validates the file before opening a database session and upserts only name, RSS URL and active status. VnExpress and Tuổi Trẻ are active for the reviewed personal RSS-reader scope; Thanh Niên remains inactive. The D3 collector enforces active/reviewed status, exact HTTPS host allowlists and redirect validation before fetching. Extraction and AI processing remain disabled in every configuration record and are not performed by the D3 ingestion path.
+D3.2 stores all three reviews in `config/sources.json`. `app.cli.seed_sources` validates the file before opening a database session and upserts only name, RSS URL and active status. VnExpress and Tuổi Trẻ are active for the reviewed personal RSS-reader scope; Thanh Niên remains inactive. The D3 collector enforces active/reviewed status, exact HTTPS host allowlists and redirect validation before fetching. Extraction and AI processing remain disabled in every configuration record and are not performed by the D3 ingestion path.
 
 On 2026-10-14, the permitted live D3 check collected VnExpress only: 51 usable feed entries were parsed, 20 were inserted under the configured cap, replaying the same attempted entries inserted zero rows, and the stored pending article was returned through REST. This verifies the implemented feed path; it does not grant extraction or AI-processing permission and does not clear Thanh Niên.
 

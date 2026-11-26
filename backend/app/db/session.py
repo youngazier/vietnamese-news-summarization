@@ -1,15 +1,14 @@
 from collections.abc import Generator
 from functools import lru_cache
 
+from app.core.config import get_settings
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine, make_url
 from sqlalchemy.exc import ArgumentError
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.core.config import get_settings
 
-
-@lru_cache()
+@lru_cache
 def get_engine() -> Engine:
     settings = get_settings()
 

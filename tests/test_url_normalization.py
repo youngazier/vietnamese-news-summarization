@@ -1,7 +1,6 @@
 """Article URL identity and validation checks."""
 
 import pytest
-
 from app.services.url_normalization import normalize_url
 
 

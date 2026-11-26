@@ -8,6 +8,7 @@ from unittest.mock import Mock
 import httpx
 import pytest
 from app.core.config import Settings
+from app.core.source_config import SourceConfig, load_source_config
 from app.db.session import get_db
 from app.main import app
 from app.models import (
@@ -20,7 +21,6 @@ from app.models import (
     Source,
     Summary,
 )
-from app.seed_sources import SourceConfig, load_source_config
 from app.services.article_extractor import ArticleExtractor
 from app.services.article_processing import process_article
 from app.services.feed_ingestion import ingest_entries

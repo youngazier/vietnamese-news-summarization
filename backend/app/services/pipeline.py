@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 
 from app.core.config import Settings
+from app.core.logging import LogEvent
 from app.services.article_processing import NewsProcessor
 
 logger = logging.getLogger(__name__)
@@ -18,9 +19,9 @@ def open_pipeline(settings: Settings) -> Iterator[tuple[NewsProcessor, str, str]
     from app.services.gemini_service import GeminiService
     from app.services.summary_service import get_summary_service
 
-    logger.info("Loading local summarizer")
+    logger.info(LogEvent.MODEL_LOADING)
     summarizer = get_summary_service()
-    logger.info("Local summarizer loaded; initializing provider and graph")
+    logger.info(LogEvent.MODEL_LOADED)
     provider = GeminiService(settings)
     try:
         graph = build_news_graph(

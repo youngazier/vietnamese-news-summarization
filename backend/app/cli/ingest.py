@@ -2,15 +2,15 @@
 
 import argparse
 import json
-import logging
 from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
-from app.core.config import get_settings
+from app.core.config import LogSettings, get_settings
+from app.core.logging import configure_logging
+from app.core.source_config import DEFAULT_SOURCE_CONFIG, load_source_config
 from app.db.session import get_session_factory
 from app.models import Article, Source
-from app.seed_sources import DEFAULT_SOURCE_CONFIG, load_source_config
 from app.services.article_extractor import ArticleExtractor
 from app.services.article_processing import process_article
 from app.services.feed_ingestion import IngestionResult, ingest_entries
@@ -23,13 +23,6 @@ from sqlalchemy.exc import SQLAlchemyError
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(levelname)s %(name)s %(message)s",
-    )
-    # HTTPX's INFO request lines include full URLs; keep only our redacted events.
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source-id", type=int, required=True)
     parser.add_argument("--config", type=Path, default=DEFAULT_SOURCE_CONFIG)
@@ -128,10 +121,15 @@ def main() -> None:
         print(json.dumps(output))
     except SQLAlchemyError:
         raise SystemExit("Ingestion failed: database operation unavailable") from None
-    except (FeedError, ValueError, RuntimeError) as exc:
-        # Validation/feed errors are deliberately short; do not print DB exceptions.
-        raise SystemExit(f"Ingestion failed: {exc}") from None
+    except (FeedError, ValueError, RuntimeError):
+        raise SystemExit(
+            "Ingestion failed: check source, feed and processing configuration"
+        ) from None
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        configure_logging(LogSettings().LOG_LEVEL)
+        main()
+    except Exception:  # noqa: BLE001 -- keep credentials out of CLI tracebacks.
+        raise SystemExit("Command failed: check configuration and service availability") from None

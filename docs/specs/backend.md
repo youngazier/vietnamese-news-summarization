@@ -9,14 +9,13 @@ One Python package (`backend/app`, Python 3.12, uv) runs as two processes: the F
 | Path (`backend/app/`) | Responsibility |
 | --- | --- |
 | `main.py`, `api/`, `schemas.py` | FastAPI app, thin route handlers, Pydantic response schemas |
-| `core/config.py` | Settings from env/`.env`, validated limits |
+| `core/` | Environment settings, reviewed source configuration and structured logging |
 | `db/` | Lazy engine/session (`session.py`), connection probe (`probe.py`) |
 | `models/` | SQLAlchemy models and enums — see [database spec](database.md) |
 | `services/` | Ingestion, extraction, ViT5, Gemini, persistence, jobs |
 | `agents/` | LangGraph workflow — see [summarization spec](summarization.md) |
-| `cli/ingest.py` | Manual collection/processing command |
+| `cli/` | Manual ingestion, source seeding and image backfill |
 | `worker.py` | Scheduler, job loop, startup recovery, shutdown |
-| `seed_sources.py`, `backfill_article_images.py` | One-off maintenance commands |
 
 ## REST API
 
@@ -91,9 +90,9 @@ Run: `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env py
 | `MAX_JOB_BACKLOG` | 5 |
 | `MAX_GRAPH_DRAFT_ATTEMPTS` | 2 (max 2) |
 | `HF_HUB_OFFLINE`, `TRANSFORMERS_OFFLINE` | 1 at runtime |
-| `LOG_LEVEL` | Declared, not yet wired into logging |
+| `LOG_LEVEL` | INFO. DEBUG, INFO, WARNING, ERROR or CRITICAL |
 
-The API validates only what it needs, so `/health` works without DB, key or model. Logs must not contain secrets, article bodies or raw provider payloads.
+The API validates only what it needs, so `/health` works without DB, key or model. The API, worker and maintenance CLIs emit one JSON object per log line to stderr with `ts`, `level`, `logger`, `event`, `job_id`, `source_id`, `article_id` and `latency_ms`. IDs and latency are null when unavailable. Application events use fixed names, and third-party messages and tracebacks are omitted. The API disables Uvicorn access logs to keep query strings out of logs. CLI result output remains on stdout.
 
 ## Related
 

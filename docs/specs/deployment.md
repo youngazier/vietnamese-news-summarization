@@ -55,4 +55,4 @@ export SUMMARIZATION_MODEL_PATH="$PWD/.models/vit5-base-vietnews-summarization"
 HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 uv run --locked --env-file .env python download_summarization_model.py
 ```
 
-Never commit model files. No CI/CD in the MVP; run checks manually (see [testing spec](testing.md)). Public hosting, TLS and authentication are out of scope.
+Never commit model files. GitHub Actions runs code quality checks. Build and start the deployment manually (see the [testing spec](testing.md)). Public hosting, TLS and authentication are out of scope.

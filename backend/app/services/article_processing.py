@@ -1,18 +1,22 @@
 """Run the AI graph for one stored article."""
 
+import logging
 from collections.abc import Callable
 from typing import Protocol
 
 from app.agents.schemas import ReviewedNews
 from app.agents.state import NewsState
+from app.core.logging import LogEvent
+from app.core.source_config import SourceConfig
 from app.models import Article, ProcessingStatus
-from app.seed_sources import SourceConfig
 from app.services.article_extractor import MAX_TEXT_CHARACTERS, MIN_TEXT_CHARACTERS
 from app.services.job_service import record_article_result
 from app.services.source_guard import require_active_source
 from app.services.summary_persistence import persist_summary
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 
 class NewsProcessor(Protocol):
@@ -94,6 +98,11 @@ def process_article(
             )
             if changed is not None and job_id is not None:
                 record_article_result(session, job_id, ProcessingStatus.FAILED)
+        if changed is not None:
+            logger.warning(
+                LogEvent.ARTICLE_PROCESSING_FAILED,
+                extra={"job_id": job_id, "source_id": source_id, "article_id": article_id},
+            )
         return changed is not None
 
     with factory() as session, session.begin():

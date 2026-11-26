@@ -9,8 +9,9 @@ from urllib.parse import unquote, urljoin, urlsplit
 from urllib.robotparser import RobotFileParser
 
 import httpx
+from app.core.logging import LogEvent
+from app.core.source_config import SourceConfig
 from app.models import ContentOrigin
-from app.seed_sources import SourceConfig
 from app.services.article_images import image_from_html
 from app.services.rss_collector import (
     HTTP_TIMEOUT_SECONDS,
@@ -256,11 +257,7 @@ class ArticleExtractor:
                 failure = f"{failure}; {'insufficient_text' if text else 'missing_text'}"
             result = ExtractionResult(text or None, origin, usable, failure, image)
         logger.info(
-            "Article source text evaluated source_id=%s article_id=%s job_id=%s failure_class=%s",
-            source_id,
-            article_id,
-            job_id,
-            result.failure_reason,
+            LogEvent.ARTICLE_TEXT_EVALUATED,
             extra={
                 "source_id": source_id,
                 "article_id": article_id,

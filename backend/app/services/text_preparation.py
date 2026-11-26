@@ -3,8 +3,8 @@
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
+from app.core.source_config import SourceConfig
 from app.models import Article, ContentOrigin, ProcessingStatus
-from app.seed_sources import SourceConfig
 from app.services.article_extractor import ArticleExtractor, ExtractionResult
 from app.services.job_service import record_article_result
 from app.services.source_guard import require_active_source

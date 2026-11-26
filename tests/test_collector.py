@@ -5,7 +5,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from app.seed_sources import SourceConfig, load_source_config
+from app.core.source_config import SourceConfig, load_source_config
 from app.services.rss_collector import (
     MAX_FEED_BYTES,
     USER_AGENT,

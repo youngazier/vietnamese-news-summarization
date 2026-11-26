@@ -10,7 +10,7 @@ from urllib.parse import urljoin, urlsplit
 
 import feedparser
 import httpx
-from app.seed_sources import SourceConfig
+from app.core.source_config import SourceConfig
 from app.services.article_images import image_from_feed
 from app.services.url_normalization import normalize_url
 from bs4 import BeautifulSoup

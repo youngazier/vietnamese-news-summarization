@@ -1,10 +1,10 @@
-from fastapi.testclient import TestClient
-from app.main import app
 import socket
+
+from app.main import app
+from fastapi.testclient import TestClient
 
 
 def test_health_returns_ok_without_external_services(monkeypatch, tmp_path):
-    """"""
     # Use an empty directory so the project's .env cannot be loaded.
     monkeypatch.chdir(tmp_path)
 
@@ -27,7 +27,6 @@ def test_health_returns_ok_without_external_services(monkeypatch, tmp_path):
     monkeypatch.setattr(socket, "getaddrinfo", prohibit_network)
 
     # Import after removing settings and prohibiting networking.
-    from app.main import app
 
     with TestClient(app) as client:
         response = client.get("/health")
