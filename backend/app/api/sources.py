@@ -1,13 +1,11 @@
 from typing import Annotated
 
+from app.db.session import get_db
+from app.models import Source
+from app.schemas import SourceRead
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from app.db.session import get_db
-from app.schemas import SourceRead
-from app.models import Source
-
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 

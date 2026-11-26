@@ -7,7 +7,6 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-
 from app.db import session as db_session
 
 
