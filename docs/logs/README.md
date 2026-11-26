@@ -14,6 +14,7 @@ One file per milestone, named `YYYY-MM-DD-short-topic.md` (date the milestone fi
 | 2026-11-07 | [Auto-approved summaries, extraction/AI enabled](2026-11-07-auto-approve-summaries.md) |
 | 2026-11-08 | [Article images](2026-11-08-article-images.md) |
 | 2026-11-25 | [Ingestion refactor](2026-11-25-refactor-ingestion.md) |
+| 2026-11-26 | [Review publication gate](2026-11-26-review-gate.md) |
 
 ## Template
 

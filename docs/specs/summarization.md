@@ -12,7 +12,7 @@ flowchart TD
     Draft --> Review[Gemini review against source]
     Review --> Gate{Approved?}
     Gate -->|Yes| Accepted((END: approved))
-    Gate -->|No, attempts < 2| Draft
+    Gate -->|No, drafts remain| Draft
     Gate -->|No, attempts = 2| Rejected((END: needs_review))
 ```
 
