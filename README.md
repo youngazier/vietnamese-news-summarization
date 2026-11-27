@@ -86,7 +86,7 @@ Use the committed Alembic revisions; never reinitialize Alembic or use `create_a
 
 ```dotenv
 GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
-GEMINI_MODEL=gemini-3.8-flash
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
 Verify access to your model with the live test (see [testing spec](docs/specs/testing.md)). The health endpoint and database probe do not need the key.
