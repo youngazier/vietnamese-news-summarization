@@ -133,6 +133,24 @@ Store every candidate summary and its verdicts in `summary_attempts`, not only t
 
 At the end of each article: **"Cùng sự kiện"** (same story from other sources, from `story_clusters`) and **"Tin liên quan"** (nearest articles by embedding, excluding the same story). No extra model.
 
+### Proposal: combine RSS description with the AI summary (undecided)
+
+**Status: undecided, raised 2026-11-27.** Reading ViT5 summaries, the project owner observed that they add little information; how often is not yet measured. In a few spot-checked articles, the publisher introduction near the start of the stored text contained facts ViT5 omitted; this was not compared with the stored RSS description field, and the sample is too small to generalize. The cause is unknown: model size, training style, input truncation and decoding are all untested. Current evaluation measures faithfulness and ROUGE, not usefulness to readers.
+
+Options:
+
+- **A — Show RSS and the full ViT5 summary:** simplest, likely repetitive.
+- **B — Use RSS as the base and let code add only new ViT5 sentences:** recommended to prototype first, not an adoption decision.
+- **C — Let Gemini merge both:** smoother, but can add errors; Gemini would write what readers see.
+
+For B: clean HTML and boilerplate, then split sentences with the abbreviation-aware splitter planned above. Compare each ViT5 sentence with the RSS text and earlier kept sentences using shared words, new numbers and names; check conflicts such as a changed number or negation before treating a sentence as a repeat. A new number or name does not prove correctness or usefulness. Check remaining sentences against the full article (Gemini Decision 1 is an untested candidate), then add at most two that are understandable on their own. If none remain, show only RSS. Set the repeat threshold from examples, not guesses.
+
+Display two separately labelled blocks, **“Mô tả từ báo”** and **“Thông tin thêm (AI tạo)”**, plus the original link. Keep RSS and ViT5 output separately in storage and derive the combined view. If RSS is empty or only repeats the headline, use an accuracy-checked ViT5 summary; for a teaser, add only checked facts and never invent an answer. A possible input experiment is to remove the introduction that duplicates RSS from ViT5 input, though this could also lose context.
+
+Before deciding, run an offline prototype on about 20 randomly chosen articles with an RSS description: compare RSS only, both in full, and filtered RSS + ViT5. Measure useful additions, wrong or contradicting additions, remaining repetition, and how often nothing is added. If filtering rarely adds anything useful, prefer RSS only.
+
+Adoption would need to reconcile the summarize–verify loop's standalone-summary assumptions: sentence 1 survives, minimum word count, and `answers_headline`. The quality rule “Never summarize an RSS excerpt” concerns RSS as summarizer input, separately from displaying it. Confirm publisher terms for displaying the RSS description with attribution against [source evidence](specs/source-evidence.md) before adoption; permission is still a check to complete.
+
 ## 3. Website: security and performance
 
 - **Auth:** Supabase Auth (email, optionally Google); FastAPI verifies the Supabase JWT and filters every user query by `user_id`. Row Level Security on user tables as a second layer.
@@ -180,3 +198,4 @@ Data warehouse or lake, streaming, orchestration frameworks, microservices, Kube
 - Embedding dimension in `pgvector` (`halfvec`): 256 vs 512 dims on Vietnamese story clustering precision/recall?
 - Database for people running the public code: Supabase, a local PostgreSQL container, or SQLite?
 - Should `vit5_trimmed` require at least 2 surviving sentences, or is 1 detailed lead sentence (≥ 25 words) enough when `answers_headline` passes?
+- Should we adopt [RSS description plus filtered ViT5 additions](#proposal-combine-rss-description-with-the-ai-summary-undecided), or does RSS alone serve readers better?
