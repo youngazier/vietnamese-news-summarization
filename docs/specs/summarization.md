@@ -84,6 +84,15 @@ HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file .env \
   python -m app.cli.ingest --source-id SOURCE_ID --process-article-id ARTICLE_ID
 ```
 
+## Evaluation baseline
+
+`python -m app.cli.eval` runs the current MVP graph without saving model outputs to the application database. It also evaluates first-draft ViT5 on a fixed slice of the published VietNews test split. See the [evaluation procedure](testing.md#priority-1-evaluation) for preparing inputs and labeling. The report uses aggregate metrics, source counts and artifact digests.
+
+- ROUGE-1, ROUGE-2 and ROUGE-L are macro-average F1 scores using Unicode-normalized, casefolded Vietnamese word tokens. CPU inference time excludes model load and Gemini. Peak RSS covers the whole process. Logical Gemini operations and HTTP attempts are tracked separately, including retries. Online wall-clock measurements include request pacing.
+- Extraction metrics treat valid full text as the positive class. The tuner maximizes mean F1 against paired human and Gemini labels on four ID buckets and reports precision and recall on the fifth. It leaves defaults in effect pending review of the held-out results.
+- Synthetic tests create one known edit per variant and retain sentence labels. Date shifts support numeric day/month and day/month/year forms, preserving separators and year precision. The existing MVP judge reviews each whole variant and its unmodified control. A rejected corrupted candidate counts as a catch. The TSV publication supplies body and reference only, so synthetic checks use the lead sentence as the title surrogate.
+- Faithfulness agreement is Cohen's κ on human-labeled, frozen ViT5 drafts. The false-reject rate uses the subset labeled faithful paraphrases. Two stateless reviews of the same payload measure stability. Missing denominators and undefined κ values are represented as null.
+
 ## Optional later: read-only tools
 
 Not implemented. If added: only bounded read-only tools (`get_source_article`, `search_related_articles` with `LIMIT 5`), max 3 tool calls, no DB writes or arbitrary network. Collection, extraction, dedup and persistence stay ordinary services, never LLM tools.

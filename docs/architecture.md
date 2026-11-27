@@ -2,7 +2,7 @@
 
 A local, single-user Vietnamese news reader. It collects articles from a few publisher RSS feeds, summarizes them with a local ViT5 model, uses Gemini for category/keywords and review, stores everything in Supabase PostgreSQL, and shows it in a React UI.
 
-**Status (2026-11-25):** backend complete (ingestion, AI workflow, jobs, worker, scheduler); reader UI and Docker setup implemented; end-to-end checks and some UI features remain. See [todos.md](todos.md).
+**Status (2026-11-26):** CI, structured JSON logs, restored review publication gate, paragraph-preserving extraction with publisher `<meta>` capture and multi-signal quality gate (`0005`), and the `P1.2` evaluation harness (`0006`) are implemented; live Gemini baseline stages and later [vision.md](vision.md) phases remain open. See [todos.md](todos.md).
 
 **Guiding principle:** build a simple working vertical slice first; add complexity only for a demonstrated need.
 
@@ -23,7 +23,7 @@ A local, single-user Vietnamese news reader. It collects articles from a few pub
 
 **In scope:** curated RSS sources (VnExpress, Tuổi Trẻ active; Thanh Niên pending), URL deduplication, permitted full-text extraction with RSS fallback, local ViT5 summaries, Gemini metadata/review via LangGraph, manual and 30-minute scheduled jobs, paginated REST API, Vietnamese reader UI, Docker Compose.
 
-**Out of scope:** authentication, public hosting, user accounts, personalization, vector search, paywall bypass, large-scale crawling, model training, multi-agent systems, LangGraph server/checkpoints, Redis/Kafka/Celery/RabbitMQ, Kubernetes, microservices, Prometheus/Grafana, CI/CD.
+**Out of scope:** authentication, public hosting, user accounts, personalization, vector search, paywall bypass, large-scale crawling, model training, multi-agent systems, LangGraph server/checkpoints, Redis/Kafka/Celery/RabbitMQ, Kubernetes, microservices, Prometheus/Grafana.
 
 All summaries are **AI-generated and may be imperfect**; every item links to its original.
 
@@ -66,7 +66,7 @@ API and worker communicate **only through PostgreSQL** (jobs and article rows), 
 1. A job is created — by `POST /api/v1/ingestion-jobs` or the 30-minute scheduler.
 2. The worker atomically claims it (`FOR UPDATE SKIP LOCKED`) and commits the claim.
 3. Pending backlog is processed first, then each source's RSS feed is fetched; new articles are inserted with a unique `canonical_url`.
-4. Text is prepared: permitted HTML extraction, else RSS excerpt. Under 200 characters → `needs_review`.
+4. Text is prepared: permitted HTML extraction with paragraph breaks and publisher `<meta>` capture, else RSS excerpt. Multi-signal quality gate routes RSS excerpts and media/weak extractions to `needs_review` with reason codes before inference.
 5. Each usable article goes through LangGraph: ViT5 draft → Gemini metadata → Gemini review, at most two drafts.
 6. Summary + article status (`ready`) + job counters are saved in one transaction.
 7. The API returns only `ready` articles with approved summaries; the UI displays them.

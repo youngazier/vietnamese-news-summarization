@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Identity, Text, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Identity, Text, false, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -42,6 +42,7 @@ class Article(Base):
     publisher_meta: Mapped[dict[str, list[str]] | None] = mapped_column(
         JSONB(none_as_null=True), nullable=True
     )
+    evaluation_exempt: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=false())
     processing_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, index=True

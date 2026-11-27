@@ -53,6 +53,35 @@ GitHub Actions runs locked backend lint, format and unit checks and frontend loc
 | Frontend | Lint/build; loading/empty/error; mobile; time labels |
 | Packaging | Compose services on loopback; network-none generation; missing-model failure |
 
+## Priority 1 evaluation
+
+The [ViT5 repository](https://github.com/vietai/ViT5) supplies the pinned VietNews test TSV. The CLI verifies its SHA-256 and deterministically samples by original row index. The default is 20 benchmark articles and up to ten reference summaries from each corpus for synthetic review. The benchmark and stored publisher corpus stay in the gitignored `.evaluation/` directory.
+
+```sh
+mkdir -p .evaluation
+curl --fail --location "$(uv run --locked python -m app.cli.eval vietnews-url)" -o .evaluation/vietnews-test.tsv
+uv run --locked python -m app.cli.eval freeze
+uv run --locked python -m app.cli.eval prepare-labels --output .evaluation/calibration-for-labeling.json
+```
+
+`freeze` reads stored rows from active, AI-permitted, configured feeds. It interleaves feeds and includes approved and unapproved strata where available. `--legacy-schema` can take a provisional read-only snapshot before migration `0005`, with publisher metadata missing. To complete calibration, freeze roughly 50 rows across both active publishers, including extraction failures or stubs and examples with accepted summaries. `prepare-labels` attaches the first ViT5 draft and its exact tokenizer-retained context.
+
+A human reviewer compares each stored body to the original publisher page and labels `extraction_valid` for completeness and relevance. For valid full text, the reviewer labels `summary_faithful` based on the source evidence and flags `real_paraphrase` for faithful drafts that use substantively different wording. Leave a field null if it could not be evaluated. Save the reviewed dataset as a new file, then protect matching database rows after migrating through `0006`.
+
+```sh
+uv run --locked python -m app.cli.eval protect --calibration .evaluation/calibration-labeled.json
+uv run --locked python -m app.cli.eval synthetic --calibration .evaluation/calibration-labeled.json --output .evaluation/synthetic.json
+HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked python -m app.cli.eval --calibration .evaluation/calibration-labeled.json --output .evaluation/report.md
+```
+
+`protect` uses one transaction and refuses stale or missing rows. `synthetic` writes the sentence-labeled variants to a new local file. The evaluation run sends eligible text to Gemini and writes an aggregate report. With `--local-only` it runs ViT5 and deterministic gate metrics without Gemini. When a Gemini call fails, the report includes the completed measurements and the failing stage, and the CLI exits nonzero. If Gemini asks for more than 30 seconds before retrying, the evaluator records the HTTP status and defers the retry. Online evaluation spaces Gemini wire requests, including retries, by at least six seconds by default. Set `--request-delay` to another interval in seconds.
+
+Use `--stage graph`, `--stage calibration`, `--stage stability` or `--stage synthetic` to run an individual online measurement with its own output path. Completed reports can be kept while retrying another stage. The calibration stage audits extraction and compares one review per labeled candidate. The stability stage sends two identical independent reviews. Only the graph stage runs fresh online-stage ViT5 inference.
+
+```sh
+uv run --locked python -m app.cli.eval --stage calibration --request-delay 6 --calibration .evaluation/calibration-labeled.json --output .evaluation/calibration-report.md
+```
+
 ## Acceptance gates
 
 The remaining end-to-end gates are tracked in [todos](../todos.md#acceptance-gates). The original A1–A12 command table is in the [archived 14-day plan](../archived/14-day-plan-2026-11-08.md#exact-acceptance-checks).
