@@ -500,6 +500,8 @@ footer p {
   border-radius: 4px;
 }
 .reader-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   font-family: Georgia, serif;
   font-size: 17px;
   line-height: 1.95;

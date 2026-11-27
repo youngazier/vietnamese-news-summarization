@@ -19,6 +19,7 @@ One file per milestone, named `YYYY-MM-DD-short-topic.md` (date the milestone fi
 | 2026-11-26 | [MVP runtime verification](2026-11-26-mvp-runtime-verification.md) |
 | 2026-11-26 | [Paragraph-preserving extraction and quality gate](2026-11-26-text-quality-gate.md) |
 | 2026-11-26 | [Provisional Priority 1 evaluation baseline](2026-11-26-evaluation-baseline.md) |
+| 2026-11-27 | [RSS description and approved AI summary display](2026-11-27-rss-summary-display.md) |
 
 ## Template
 

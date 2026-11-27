@@ -22,6 +22,7 @@ export interface ArticleRead {
   id: number;
   title: string;
   original_url: string;
+  rss_description: string | null;
   image_url: string | null;
   source: SourceRead;
   published_at: string | null;

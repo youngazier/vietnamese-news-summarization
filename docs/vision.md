@@ -135,13 +135,13 @@ Store every candidate summary and its verdicts in `summary_attempts`, not only t
 
 At the end of each article: **"Cùng sự kiện"** (same story from other sources, from `story_clusters`) and **"Tin liên quan"** (nearest articles by embedding, excluding the same story). No extra model.
 
-### RSS description and AI summary together (decided, not implemented)
+### RSS description and AI summary together (implemented, reviewed)
 
 **Decision: 2026-11-27.** Show the full stored RSS description and full ViT5 summary together as two separately labelled blocks, **“Mô tả từ báo”** and **“Tóm tắt AI”**, plus publisher attribution and the original link. This is option A: no sentence filtering or merging for now. Separate labels let readers see who wrote what. ViT5 quality and informativeness work is not a priority for now.
 
 Reading ViT5 summaries, the project owner observed that they add little information; how often is not yet measured. In a few spot-checked articles, the publisher introduction near the start of the stored text contained facts ViT5 omitted; this was not compared with the stored RSS description field, and the sample is too small to generalize. The cause is unknown: model size, training style, input truncation and decoding are all untested. Current evaluation measures faithfulness and ROUGE, not usefulness to readers.
 
-**Current implementation:** RSS descriptions are stored, but `ArticleCard`/`ArticleDetail` and their routes do not expose `rss_description`; the frontend API types and reader do not show it. The reader already displays the full approved summary and original link. Implementing the two blocks remains an unchecked reader task in [todos.md](todos.md#p43-complete-reader-ui-routing--mobile-performance-upgraded-r4).
+**Current implementation (2026-11-27):** `ArticleCard`/`ArticleDetail` and their routes now expose cleaned `rss_description`; the frontend types and reader show it alongside the full approved summary and original link. Missing blocks follow the fallback below, without changing article visibility. Independent review round 2 passed on 2026-11-27 after round 1 fixes; this display task in [todos.md](todos.md#p43-complete-reader-ui-routing--mobile-performance-upgraded-r4) is complete, while the rest of P4.3 remains open.
 
 Keep RSS and ViT5 output separately and compose the view without rewriting either. Omit an empty RSS block and show the available approved summary; when a summary is absent or hidden, omit the AI block and show the available RSS description only where the article is already readable, with the original link. If neither is available, keep the existing status/original-link fallback. Preserve the publication gate: summary text is returned only for `ready` articles with an approved summary; rejected drafts in `needs_review` remain hidden. Some other article states can currently return metadata without summary text; this display decision does not change article visibility or permit exposing non-approved summaries.
 

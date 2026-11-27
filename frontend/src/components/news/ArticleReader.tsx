@@ -94,24 +94,35 @@ export function ArticleReader({ article }: { article: Article }) {
           <Skeleton className="h-5 w-full" />
           <Skeleton className="h-5 w-4/5" />
         </div>
-      ) : approved ? (
-        <>
-          <Badge variant="secondary">Tóm tắt bằng AI</Badge>
-          <p className="reader-body">{detail.summary!.summary_text}</p>
-          <div className="flex flex-wrap gap-2" aria-label="Từ khóa">
-            {detail.summary!.keywords.map((keyword) => (
-              <Badge key={keyword} variant="outline">
-                {keyword}
-              </Badge>
-            ))}
-          </div>
-        </>
       ) : (
-        <p className="reader-body">
-          {statusLabels[detail.processing_status]}
-          . Bài viết chưa có bản tóm tắt. Mời bạn đọc nội dung đầy đủ
-          tại nguồn.
-        </p>
+        <>
+          {detail.rss_description?.trim() && (
+            <section aria-label="Mô tả từ báo">
+              <h3 className="font-semibold">Mô tả từ báo</h3>
+              <p className="text-sm text-muted-foreground">Nguồn: {detail.source.name}</p>
+              <p className="reader-body">{detail.rss_description}</p>
+            </section>
+          )}
+          {approved && detail.summary!.summary_text.trim() ? (
+            <section aria-label="Tóm tắt AI">
+              <h3 className="font-semibold">Tóm tắt AI</h3>
+              <p className="reader-body">{detail.summary!.summary_text}</p>
+              <div className="flex flex-wrap gap-2" aria-label="Từ khóa">
+                {detail.summary!.keywords.map((keyword) => (
+                  <Badge key={keyword} variant="outline">
+                    {keyword}
+                  </Badge>
+                ))}
+              </div>
+            </section>
+          ) : !detail.rss_description?.trim() ? (
+            <p className="reader-body">
+              {statusLabels[detail.processing_status]}
+              . Bài viết chưa có bản tóm tắt. Mời bạn đọc nội dung đầy đủ
+              tại nguồn.
+            </p>
+          ) : null}
+        </>
       )}
       {(article.excerptOnly || article.inputTruncated) && (
         <p className="reader-context">

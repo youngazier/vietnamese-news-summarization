@@ -35,7 +35,7 @@ No auth; local loopback only. Timestamps are ISO 8601 UTC.
 | Schema | Fields |
 | --- | --- |
 | `SourceRead` | id, name, rss_url, last_fetched_at? |
-| `ArticleCard` | id, title, original_url, image_url?, source, published_at?, created_at, content_origin?, processing_status, category?, summary_preview?, input_truncated? |
+| `ArticleCard` | id, title, original_url, rss_description?, image_url?, source, published_at?, created_at, content_origin?, processing_status, category?, summary_preview?, input_truncated? |
 | `ArticleDetail` | `ArticleCard` + summary? (`SummaryRead`) + `ai_generated` |
 | `SummaryRead` | summary_text, keywords, summarize_model_name, agent_model_name, created_at, input_truncated |
 | `ArticlePage` | items, total, page, page_size |
@@ -46,6 +46,7 @@ No auth; local loopback only. Timestamps are ISO 8601 UTC.
 - Filters combine with AND. `q` searches titles with parameterized `ILIKE` (wildcards escaped). The count uses the same filters. Out-of-range pages return empty items with the true total.
 - Articles with a persisted rejected draft in `needs_review` are omitted from list results and totals, and return 404 on detail reads.
 - Summary, category, keywords and preview (≤ 240 chars) appear **only** for `ready` articles with an approved summary (`_is_visible` in `api/articles.py`). Raw content, RSS HTML and prompts are never returned. `ai_generated` is true only when a summary is shown.
+- List cards and detail responses include nullable `rss_description`, independent of summary approval for articles already readable under the existing filters. Ingestion strips RSS markup with `rss_collector.clean_html` before storage. Serialization preserves every nonblank stored character, including whitespace, literal angle brackets and entity spellings; only NULL or whitespace-only descriptions become NULL. The original collector (`8084aff`) already cleaned descriptions, and the current insertion path copies them unchanged. No known legacy raw-HTML storage path or format marker was found in code/history, so the API does not guess a stored format or clean it again. Descriptions are not truncated or merged with summaries, and stored rows are not rewritten. No visibility predicates change.
 - Errors: unknown source on POST → 404; inactive/no active sources → 422; backlog full (`MAX_JOB_BACKLOG`, default 5) → 429; DB unavailable → redacted 503. App errors use `detail: {code, message}`.
 
 ## Jobs

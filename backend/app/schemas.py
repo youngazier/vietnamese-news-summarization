@@ -27,6 +27,7 @@ class ArticleCard(BaseModel):
     id: int
     title: str
     original_url: str
+    rss_description: str | None
     image_url: str | None
     source: SourceRead
     published_at: datetime | None

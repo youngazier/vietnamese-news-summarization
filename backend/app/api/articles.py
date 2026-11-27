@@ -33,6 +33,9 @@ def _to_card(article: Article) -> ArticleCard:
         id=article.id,
         title=article.title,
         original_url=article.original_url,
+        rss_description=article.rss_description
+        if article.rss_description and article.rss_description.strip()
+        else None,
         image_url=article.image_url,
         source=SourceRead.model_validate(article.source),
         published_at=article.published_at,
