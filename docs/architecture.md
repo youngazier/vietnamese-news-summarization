@@ -2,7 +2,7 @@
 
 A local, single-user Vietnamese news reader. It collects articles from a few publisher RSS feeds, summarizes them with a local ViT5 model, uses Gemini for category/keywords and review, stores everything in Supabase PostgreSQL, and shows it in a React UI.
 
-**Status (2026-11-26):** CI, structured JSON logs, restored review publication gate, paragraph-preserving extraction with publisher `<meta>` capture and multi-signal quality gate (`0005`), and the `P1.2` evaluation harness (`0006`) are implemented; live Gemini baseline stages and later [vision.md](vision.md) phases remain open. See [todos.md](todos.md).
+**Status (2026-11-27):** CI, structured JSON logs, restored review publication gate, paragraph-preserving extraction with publisher `<meta>` capture and multi-signal quality gate (`0005`), and the `P1.2` evaluation harness (`0006`) are implemented and merged; human review of the calibration labels, live Gemini baseline stages and later [vision.md](vision.md) phases remain open. See [todos.md](todos.md).
 
 **Guiding principle:** build a simple working vertical slice first; add complexity only for a demonstrated need.
 
@@ -100,7 +100,7 @@ compose.yaml      frontend + api + worker
 | --- | --- |
 | Publisher feed changes / reuse terms | Reviewed config, fixtures in tests, attribution, keep Thanh Niên off |
 | LLM hallucination | Source-only prompts, review step, bounded drafts, "AI-generated" label |
-| Short RSS excerpts | Store `content_origin`; skip text under 200 chars |
+| Short RSS excerpts or weak extraction | Store `content_origin`; the [quality gate](specs/ingestion.md#text-quality-contract) routes rejected text to `needs_review` before inference |
 | Duplicates / crashes | Unique constraints, atomic claims, startup recovery, one worker |
 | Gemini cost / rate limits | Per-job caps, bounded retries, input truncation |
 | CPU latency / RAM (~1.3 GiB) | One preloaded model, bounded tokens, small batches |

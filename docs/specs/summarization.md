@@ -64,7 +64,7 @@ Smoke test: `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 uv run --locked --env-file 
 - 30 s timeout per HTTP attempt. `HttpRetryOptions.attempts=2` means **2 retries = 3 wire requests** in google-genai 2.29. Retries on 429/500/502/503/504 only. No extra app retry loop.
 - Worst case: 2 operations × 2 drafts × 3 requests = **12 requests per article**.
 - Prompts (`agents/prompts.py`) keep instructions separate from article JSON. Article and summary text are untrusted data, not instructions.
-- `GEMINI_MODEL` is configurable (verified: `gemini-3.8-flash`).
+- `GEMINI_MODEL` is configurable and drives both metadata and review. Verified: `gemini-3.8-flash`, and `gemini-3.5-flash-lite` (2026-11-27: a live check on synthetic Vietnamese text returned valid metadata, approved a correct summary and rejected one with a planted number and fee error; this does not measure review quality, and the full pipeline was not run).
 
 Review checks names, dates, numbers, quotes and critical claims against the supplied source. It is a quality heuristic, **not fact-checking**.
 

@@ -2,20 +2,20 @@
 
 Living task list aligned with [vision.md](vision.md). Update it whenever a task is finished, added or dropped (see the documentation rules in [AGENTS.md](../AGENTS.md)). Check a box only after its verification passed. Completed milestone history: [logs/](logs/) and the [archived 14-day plan](archived/14-day-plan-2026-11-08.md).
 
-**Last updated:** 2026-11-26
+**Last updated:** 2026-11-27
 
 ## Status
 
 | Area | State |
 | --- | --- |
-| API, database, migrations (`0001`–`0006`) | Done (`0005` merged on `master`; `0006` applied on dev DB on `feat/evaluation-baseline`) |
+| API, database, migrations (`0001`–`0006`) | Done (`0005` and `0006` merged on `master`; `0006` applied on dev DB) |
 | RSS ingestion, dedup, text extraction, images | Done (VnExpress, Tuổi Trẻ; paragraph extraction, publisher meta & quality gate merged in `P1.1`) |
 | MVP ViT5 + Gemini LangGraph workflow | Review publication gate restored |
 | Jobs, worker, scheduler, startup recovery | Done |
 | Ingestion refactor (5 phases) | Done, merged 2026-11-25 |
 | Reader UI (feed, client filter/search, detail dialog) | MVP mostly done; full routing/search in `P4.3` |
 | Docker (`frontend`, `api`, `worker`) | Offline, model isolation and restart checks passed. Live job completion blocked by Gemini HTTP 503 → `P0.3` |
-| Post-MVP vision ([vision.md](vision.md)) | `P0.1`–`P0.2` & `P1.1` merged; `P1.2` offline baseline, 50-article cross-source labeled & protected snapshot, and default gate P/R measured; online Gemini stages blocked by HTTP 429 (~430–525 calls vs. ~20 RPD free-tier cap) |
+| Post-MVP vision ([vision.md](vision.md)) | `P0.1`–`P0.2` & `P1.1` merged; `P1.2` offline baseline, 50-article cross-source labeled & protected snapshot, and default gate P/R measured; offline work merged on `master`; human label review open; online Gemini stages last stopped by HTTP 429 on `gemini-3.8-flash` (~430–525 calls vs. ~20 RPD free-tier cap) and not yet retried on `gemini-3.5-flash-lite` |
 | Third source (Thanh Niên) | Blocked on reuse terms |
 
 ## Agent execution guide
@@ -113,13 +113,13 @@ Fix HTML paragraph extraction once and establish reproducible baseline metrics *
 
 **Read first:** [AGENTS.md](../AGENTS.md), [vision.md](vision.md) (Guiding rules & Section 2: Evaluation first), [specs/summarization.md](specs/summarization.md), [specs/testing.md](specs/testing.md).
 
-- [x] Create a frozen evaluation dataset (~50 real stored articles across active sources flagged exempt from 30-day content deletion, with one-time human labels for extraction validity and summary faithfulness) plus a held-out slice of the `vietnews` dataset.
+- [ ] Create a frozen evaluation dataset (~50 real stored articles across active sources flagged exempt from 30-day content deletion, with one-time human labels for extraction validity and summary faithfulness) plus a held-out slice of the `vietnews` dataset. The frozen, protected snapshot and the `vietnews` slice are done; its labels are AI-assisted, so human review is still open.
 - [ ] Tune `P1.1`'s quality-gate thresholds against Gemini + human calibration labels and record measured precision/recall (default gate measured at precision `0.9592`, recall `1.0000`, F1 `0.9792` vs. 50 labeled articles; Gemini-paired tuning waits for 429 quota reset).
 - [x] Implement a deterministic synthetic error injector over known-good summaries (`vietnews` references + accepted summaries) creating sentence-labeled corruptions: number mutation, proper-name swap, date shift, clause negation, and cross-article sentence insertion.
 - [x] Build a single reproducible CLI (`python -m app.cli.eval`) outputting: ViT5 ROUGE on held-out `vietnews`, synthetic catch rate and false-accept rate, human-to-judge agreement (Cohen's κ) and real-paraphrase false-reject rate on the ~50-article calibration set, judge stability across 2 identical runs, CPU latency/article, peak RSS RAM, and logical/wire Gemini calls per article.
 - [ ] Run `python -m app.cli.eval` online stages (`synthetic`, `calibration`, `stability`, `graph`) on the current MVP summarization pipeline once Gemini API 429 quota resets, and commit the completed **baseline** Markdown report to [logs/](logs/).
 
-The evaluator supports paced requests and individual online stages. The [evaluation baseline](logs/2026-11-26-evaluation-baseline.md) records held-out ViT5 metrics, the 50-article cross-source AI-assisted labeled & protected snapshot (30 VnExpress + 20 Tuổi Trẻ, `evaluation_exempt=True`), default quality-gate P/R (`0.9592` / `1.0000`, F1 `0.9792`), and 24 synthetic cases. Only the live Gemini stages remain blocked by HTTP 429 (`retry_deferred: true`). Running all four full online stages requires ~430–525 logical Gemini calls (exceeding typical ~20 RPD free-tier caps), so completing them needs Tier 1 billing, a higher-RPD model, or checkpointed stage slicing.
+The evaluator supports paced requests and individual online stages. The [evaluation baseline](logs/2026-11-26-evaluation-baseline.md) records held-out ViT5 metrics, the 50-article cross-source AI-assisted labeled & protected snapshot (30 VnExpress + 20 Tuổi Trẻ, `evaluation_exempt=True`), default quality-gate P/R (`0.9592` / `1.0000`, F1 `0.9792`), and 24 synthetic cases. The live Gemini stages were last stopped by HTTP 429 (`retry_deferred: true`) on `gemini-3.8-flash`. Review the 50 labels before relying on human-to-judge κ, and run all online stages on one named model. Running all four full online stages requires ~430–525 logical Gemini calls (exceeding typical ~20 RPD free-tier caps), so completing them needs Tier 1 billing, a higher-RPD model, or checkpointed stage slicing.
 
 **Done when:** One command reproduces the baseline evaluation report, quality-gate precision/recall and judge Cohen's κ are recorded, and frozen eval fixtures are protected from retention cleanup.
 
