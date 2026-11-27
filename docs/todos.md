@@ -15,7 +15,7 @@ Living task list aligned with [vision.md](vision.md). Update it whenever a task 
 | Ingestion refactor (5 phases) | Done, merged 2026-11-25 |
 | Reader UI (feed, client filter/search, detail dialog) | MVP mostly done; full routing/search in `P4.3` |
 | Docker (`frontend`, `api`, `worker`) | Offline, model isolation and restart checks passed. Live job completion blocked by Gemini HTTP 503 → `P0.3` |
-| Post-MVP vision ([vision.md](vision.md)) | `P0.1`–`P0.2` & `P1.1` merged; `P1.2` offline baseline, 50-article cross-source labeled & protected snapshot, and default gate P/R measured; offline work merged on `master`; human label review open; online Gemini stages last stopped by HTTP 429 on `gemini-3.8-flash` (~430–525 calls vs. ~20 RPD free-tier cap) and not yet retried on `gemini-3.5-flash-lite` |
+| Post-MVP vision ([vision.md](vision.md)) | `P0.1`–`P0.2` & `P1.1` merged; `P1.2` offline baseline, 50-article cross-source labeled & protected snapshot, and default gate P/R measured; offline work merged on `master`; human label review incomplete and remaining `P1.2` work deprioritised (not dropped) by user direction on 2026-11-27; online Gemini stages last stopped by HTTP 429 on `gemini-3.8-flash` (~430–525 calls vs. ~20 RPD free-tier cap) and not yet retried on `gemini-3.5-flash-lite` |
 | Third source (Thanh Niên) | Blocked on reuse terms |
 
 ## Agent execution guide
@@ -103,17 +103,21 @@ Fix HTML paragraph extraction once and establish reproducible baseline metrics *
 - [x] Replace `MIN_TEXT_CHARACTERS = 200` with combined deterministic signals: minimum word count, sentence count, token overlap with RSS title/description, duplicate-line ratio, boilerplate phrase blocklist (`"Đăng nhập"`, `"Xem thêm"`, …), `its_type` photo/video check, and `/video/` or `/photo/` URL patterns; store exact failing reason codes in `articles.processing_error`.
 - [x] Add fixture-based unit tests and PostgreSQL migration integration tests; update [specs/ingestion.md](specs/ingestion.md) and [specs/database.md](specs/database.md); write a milestone log in [logs/](logs/).
 
+- [ ] Detect and exclude quiz/puzzle content at the quality gate (user requirement, 2026-11-27; calibration article 84 identified as an unwanted quiz), with a clear rejection reason, fixture tests and an update to [specs/ingestion.md](specs/ingestion.md). No dedicated detection exists in the current gate; avoid treating ordinary news questions as quizzes.
+
 **Done when:** Paragraph breaks and publisher `<meta>` fields are captured in one pass, no RSS excerpt or video/photo stub reaches summarization, and every rejection stores a clear reason code.
 
 ### P1.2 Evaluation harness, synthetic error set & ~50-article calibration (upgraded R3)
 
 **Why:** Every later change in [vision.md](vision.md) requires a reproducible before/after number, calibrated once against human labels so the automated judge is trustworthy.
 
+**Status (2026-11-27):** Remaining P1.2 work is deprioritised, not dropped; this milestone is not done. An independent AI review labelled all 50 items using stored text only, without reading live article bodies. The user then checked selected items: 94 and 95 were fine, 84 was an unwanted quiz, and the user had no opinion on the other disputed items (54, 62, 63, 65, 71, 75, 90). The user chose to stop label work and not prioritise ViT5 performance for now. These selected comments are not human labels for all 50 items and do not establish human-to-judge agreement.
+
 **Branch:** `git checkout master && git checkout -b feat/evaluation-baseline`
 
 **Read first:** [AGENTS.md](../AGENTS.md), [vision.md](vision.md) (Guiding rules & Section 2: Evaluation first), [specs/summarization.md](specs/summarization.md), [specs/testing.md](specs/testing.md).
 
-- [ ] Create a frozen evaluation dataset (~50 real stored articles across active sources flagged exempt from 30-day content deletion, with one-time human labels for extraction validity and summary faithfulness) plus a held-out slice of the `vietnews` dataset. The frozen, protected snapshot and the `vietnews` slice are done; its labels are AI-assisted, so human review is still open.
+- [ ] Create a frozen evaluation dataset (~50 real stored articles across active sources flagged exempt from 30-day content deletion, with one-time human labels for extraction validity and summary faithfulness) plus a held-out slice of the `vietnews` dataset. The frozen, protected snapshot and the `vietnews` slice are done; its labels are AI-assisted, not a 50-item human-label dataset; human review remains incomplete and is deprioritised, not dropped.
 - [ ] Tune `P1.1`'s quality-gate thresholds against Gemini + human calibration labels and record measured precision/recall (default gate measured at precision `0.9592`, recall `1.0000`, F1 `0.9792` vs. 50 labeled articles; Gemini-paired tuning waits for 429 quota reset).
 - [x] Implement a deterministic synthetic error injector over known-good summaries (`vietnews` references + accepted summaries) creating sentence-labeled corruptions: number mutation, proper-name swap, date shift, clause negation, and cross-article sentence insertion.
 - [x] Build a single reproducible CLI (`python -m app.cli.eval`) outputting: ViT5 ROUGE on held-out `vietnews`, synthetic catch rate and false-accept rate, human-to-judge agreement (Cohen's κ) and real-paraphrase false-reject rate on the ~50-article calibration set, judge stability across 2 identical runs, CPU latency/article, peak RSS RAM, and logical/wire Gemini calls per article.
@@ -270,6 +274,7 @@ Shrink worker memory for free-tier hosting and finish the fast, searchable singl
 
 - [ ] Replace the multi-page fetch loop in `frontend/src/services/api.ts` with cursor/keyset pagination, debounced server-side search (`q`), multi-category filter, clickable tag chips, and source filter backed by `AbortController`.
 - [ ] Add route-based navigation (`/articles/:id` plus `/ingestion` or `/stats` dashboard view) with route code-splitting, preserving feed scroll/filter state when navigating back, loading skeletons, 404/error retry states, and fixed-size `loading="lazy"` images.
+- [ ] Implement the [RSS description + AI summary display decision](vision.md#rss-description-and-ai-summary-together-decided-not-implemented): expose the stored `rss_description` in the article API schema/routes and frontend types, show the full description and full approved ViT5 summary as “Mô tả từ báo” and “Tóm tắt AI” with attribution and original link, without filtering/merging. Handle missing blocks without changing article visibility or exposing non-approved summaries; confirm publisher terms against [source evidence](specs/source-evidence.md), add API/reader tests and update [specs/backend.md](specs/backend.md) and [specs/frontend.md](specs/frontend.md) when implemented.
 - [ ] Render the model transparency chip (`Tóm tắt AI · ViT5` for `vit5`/`vit5_trimmed`, `Tóm tắt AI · Gemini` for `gemini`), truncation/collection-time labels, and **"Cùng sự kiện"** + **"Tin liên quan"** cards on article detail.
 - [ ] Verify mobile/desktop responsiveness, keyboard focus/navigation, and Lighthouse mobile performance ≥ 90; update [specs/frontend.md](specs/frontend.md) and write a milestone log in [logs/](logs/).
 

@@ -32,6 +32,8 @@ Guiding rules:
 
 Preserve paragraph structure (`<p>`) and strip DOM noise (`<figcaption>`, related-article boxes, share/comment blocks) during HTML extraction instead of flattening everything into one space-joined string. Replace the ≥200-character check with combined signals (word count, sentences, overlap with the RSS title/description, duplicate lines, boilerplate phrases, `/video/` and `/photo/` URLs) and store a reason code for every rejection. Never summarize an RSS excerpt.
 
+Exclude quiz/puzzle content from news summarization at the quality gate (user requirement, 2026-11-27; calibration article 84 is an unwanted quiz). The current gate has no dedicated quiz/puzzle detection; its length, overlap, boilerplate and media checks do not establish that content is news. Detection, a rejection reason and fixture tests remain planned in [todos.md](todos.md#p11-paragraph-preserving-html-extraction-single-pass-meta-capture--quality-gate-upgraded-r2).
+
 Thresholds are tuned with minimal labeling: Gemini judges a sample ("is this the full article for this title?"), validated against the small human calibration set, and the gate's precision/recall is measured against that. Articles that pass the gate but later fail summarization are tracked per source; a spike means a selector broke.
 
 ### Near-duplicates and story clusters
@@ -133,23 +135,19 @@ Store every candidate summary and its verdicts in `summary_attempts`, not only t
 
 At the end of each article: **"Cùng sự kiện"** (same story from other sources, from `story_clusters`) and **"Tin liên quan"** (nearest articles by embedding, excluding the same story). No extra model.
 
-### Proposal: combine RSS description with the AI summary (undecided)
+### RSS description and AI summary together (decided, not implemented)
 
-**Status: undecided, raised 2026-11-27.** Reading ViT5 summaries, the project owner observed that they add little information; how often is not yet measured. In a few spot-checked articles, the publisher introduction near the start of the stored text contained facts ViT5 omitted; this was not compared with the stored RSS description field, and the sample is too small to generalize. The cause is unknown: model size, training style, input truncation and decoding are all untested. Current evaluation measures faithfulness and ROUGE, not usefulness to readers.
+**Decision: 2026-11-27.** Show the full stored RSS description and full ViT5 summary together as two separately labelled blocks, **“Mô tả từ báo”** and **“Tóm tắt AI”**, plus publisher attribution and the original link. This is option A: no sentence filtering or merging for now. Separate labels let readers see who wrote what. ViT5 quality and informativeness work is not a priority for now.
 
-Options:
+Reading ViT5 summaries, the project owner observed that they add little information; how often is not yet measured. In a few spot-checked articles, the publisher introduction near the start of the stored text contained facts ViT5 omitted; this was not compared with the stored RSS description field, and the sample is too small to generalize. The cause is unknown: model size, training style, input truncation and decoding are all untested. Current evaluation measures faithfulness and ROUGE, not usefulness to readers.
 
-- **A — Show RSS and the full ViT5 summary:** simplest, likely repetitive.
-- **B — Use RSS as the base and let code add only new ViT5 sentences:** recommended to prototype first, not an adoption decision.
-- **C — Let Gemini merge both:** smoother, but can add errors; Gemini would write what readers see.
+**Current implementation:** RSS descriptions are stored, but `ArticleCard`/`ArticleDetail` and their routes do not expose `rss_description`; the frontend API types and reader do not show it. The reader already displays the full approved summary and original link. Implementing the two blocks remains an unchecked reader task in [todos.md](todos.md#p43-complete-reader-ui-routing--mobile-performance-upgraded-r4).
 
-For B: clean HTML and boilerplate, then split sentences with the abbreviation-aware splitter planned above. Compare each ViT5 sentence with the RSS text and earlier kept sentences using shared words, new numbers and names; check conflicts such as a changed number or negation before treating a sentence as a repeat. A new number or name does not prove correctness or usefulness. Check remaining sentences against the full article (Gemini Decision 1 is an untested candidate), then add at most two that are understandable on their own. If none remain, show only RSS. Set the repeat threshold from examples, not guesses.
+Keep RSS and ViT5 output separately and compose the view without rewriting either. Omit an empty RSS block and show the available approved summary; when a summary is absent or hidden, omit the AI block and show the available RSS description only where the article is already readable, with the original link. If neither is available, keep the existing status/original-link fallback. Preserve the publication gate: summary text is returned only for `ready` articles with an approved summary; rejected drafts in `needs_review` remain hidden. Some other article states can currently return metadata without summary text; this display decision does not change article visibility or permit exposing non-approved summaries.
 
-Display two separately labelled blocks, **“Mô tả từ báo”** and **“Thông tin thêm (AI tạo)”**, plus the original link. Keep RSS and ViT5 output separately in storage and derive the combined view. If RSS is empty or only repeats the headline, use an accuracy-checked ViT5 summary; for a teaser, add only checked facts and never invent an answer. A possible input experiment is to remove the introduction that duplicates RSS from ViT5 input, though this could also lose context.
+**Later options, not adopted:** B uses RSS as the base and code adds only new, independently understandable ViT5 sentences checked against the full article; C lets Gemini merge both, which may read more smoothly but can add errors and makes Gemini write what readers see. RSS only is also not chosen for now. Any future filtering experiment should measure useful additions, wrong or contradicting additions, repetition and how often nothing is added before adding complexity. It would need to reconcile the planned summarize–verify loop's standalone-summary assumptions (sentence 1 survives, minimum word count, `answers_headline`). No prototype is required before implementing option A.
 
-Before deciding, run an offline prototype on about 20 randomly chosen articles with an RSS description: compare RSS only, both in full, and filtered RSS + ViT5. Measure useful additions, wrong or contradicting additions, remaining repetition, and how often nothing is added. If filtering rarely adds anything useful, prefer RSS only.
-
-Adoption would need to reconcile the summarize–verify loop's standalone-summary assumptions: sentence 1 survives, minimum word count, and `answers_headline`. The quality rule “Never summarize an RSS excerpt” concerns RSS as summarizer input, separately from displaying it. Confirm publisher terms for displaying the RSS description with attribution against [source evidence](specs/source-evidence.md) before adoption; permission is still a check to complete.
+The quality rule “Never summarize an RSS excerpt” concerns RSS as summarizer input, separately from displaying it. [Source evidence](specs/source-evidence.md) supports attributed personal/nonprofit RSS-reader use for VnExpress and Tuổi Trẻ, subject to source attribution and cessation conditions, and calls for rendering cleaned plain text rather than RSS HTML. It leaves Thanh Niên reuse unresolved and does not establish publisher permission for full-article extraction, third-party AI processing or generated-summary publication; its later enablement note records user direction for the local reader, not new publisher permission. Confirm that displaying full stored RSS descriptions with attribution fits the intended use and recheck terms before changing deployment scope.
 
 ## 3. Website: security and performance
 
@@ -198,4 +196,3 @@ Data warehouse or lake, streaming, orchestration frameworks, microservices, Kube
 - Embedding dimension in `pgvector` (`halfvec`): 256 vs 512 dims on Vietnamese story clustering precision/recall?
 - Database for people running the public code: Supabase, a local PostgreSQL container, or SQLite?
 - Should `vit5_trimmed` require at least 2 surviving sentences, or is 1 detailed lead sentence (≥ 25 words) enough when `answers_headline` passes?
-- Should we adopt [RSS description plus filtered ViT5 additions](#proposal-combine-rss-description-with-the-ai-summary-undecided), or does RSS alone serve readers better?
